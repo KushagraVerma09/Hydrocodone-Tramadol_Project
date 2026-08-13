@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm -rf out)",
+      "Bash(Rscript test17b.R)"
+    ]
+  }
+}
