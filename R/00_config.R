@@ -9,7 +9,7 @@
 ## pipeline produces. Nothing needs to be edited in more than one place.
 ##
 ## This file produces no output on its own. It is sourced by:
-##   01_load_data.R, 02_table1.R, 03_figures.R, 04_mediation_single.R,
+##   01_load_data.R, 02_table1.R, 03_figures.R, 04_med iation_single.R,
 ##   05_multivariable_regression.R, 06_parallel_mediation_sem.R,
 ##   07_nested_regression.R, Run_All.R, and ../Compose_Figure_Panels.R
 ##
