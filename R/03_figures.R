@@ -586,7 +586,9 @@ x_axis_ttest <- function(d,
   ## n is already on the facet strip / in the corner box, and every one of them --
   ## Cohen's d included -- is still carried in `row` and written to the
   ## Xaxis_ttest sheet. Nothing is lost, it just isn't spent on figure height.
-  xtag  <- if (is.na(rs_name)) "Receptor activity" else gsub("_", " ", rs_name)
+  ## Same render-time naming as the axis title (receptor_set_label, 01) so the
+  ## box and the axis under it never disagree: "5HT4", not "HT4_Only".
+  xtag  <- if (is.na(rs_name)) "Receptor activity" else receptor_set_label(rs_name)
   mns   <- fmt_mean_pair(mean(x1), mean(x2))
   label <- sprintf("%s mean: %s = %s, %s = %s | Welch t = %.2f, %s",
                    xtag, glab(g1), mns[1], glab(g2), mns[2],

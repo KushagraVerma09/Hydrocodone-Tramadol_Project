@@ -247,12 +247,27 @@ compute_x_value <- function(data, receptor_subset, scale_mode = X_MODE) {
 ## Back-compatible alias so older calls still work
 compute_disease_axis <- compute_x_value
 
+## Receptor-set key -> the receptor name(s) as they should READ on a figure:
+## every serotonin receptor gets its "5" back ("HT4" -> "5HT4") and the
+## structural words become symbols ("HT6_plus_HT4" -> "5HT6 + 5HT4"). Render
+## time only -- receptor_sets, filenames and sheet names keep the raw keys.
+receptor_set_label <- function(rs_name) {
+  special <- c(All_Receptors = "All Receptors",
+               Six_Specified = "Six Receptors")
+  if (rs_name %in% names(special)) return(unname(special[rs_name]))
+  toks <- strsplit(rs_name, "_", fixed = TRUE)[[1]]
+  toks <- toks[!toks %in% c("Only", "plus", "and")]
+  toks <- sub("^5?HT", "5HT", toks)
+  paste(toks, collapse = " + ")
+}
+
 ## Human-readable x-axis label for a given receptor set
 x_axis_label <- function(rs_name) {
+  pretty <- receptor_set_label(rs_name)
   if (X_MODE == "raw")
-    paste0("Receptor-related brain activity \u2014 ", rs_name)
+    paste0(pretty, " Activity")
   else
-    paste0("Biological Disease Axis (0 = Healthy, 1 = CBP-O) [Set: ", rs_name, "]")
+    paste0("Biological Disease Axis (0 = Healthy, 1 = CBP-O) [Set: ", pretty, "]")
 }
 
 ## Define subsets as requested
