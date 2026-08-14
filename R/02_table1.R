@@ -281,20 +281,22 @@ message("\nPublication table successfully formatted and saved to: ", normalizePa
 ## a gt .html/.docx). Table 2 predicts NRS pain, Table 3 predicts SOWS
 ## withdrawal.
 ##
-## Only THREE of 07's six models appear, by request -- positions 3, 4 and 6 of
-## MREG_MODELS:
-##   HT4_HT6            y ~ log_ROE + R_5HT4 + R_5HT6
-##   HT4_HT6_Int        + R_5HT4 x R_5HT6
-##   HT4_HT6_Cov_noMME  + sex + MQS non-opioid + SOWS + DOU
-## Position 5 (HT4_HT6_Cov) is deliberately left out: it adds log_MME, which is
-## missing for 5 subjects, so it is fit on 13 rows rather than 17 and its
-## adj. R2 / n cannot be read against the other two columns. That is the whole
-## reason the no-MME twin exists (see 07_nested_regression.R section 18m).
+## Only THREE of 07's five models appear, by request -- M3, M4 and M5:
+##   HT4_HT6             M3  y ~ log_ROE + R_5HT4 + R_5HT6
+##   HT4_HT6_ROEint      M4  + (log_ROE x R_5HT4) + (log_ROE x R_5HT6)
+##   HT4_HT6_ROEint_Cov  M5  + sex + log10 MME + MQS non-opioid
+## M1 (log_ROE + R_5HT4) and M2 (log_ROE + R_5HT6) are the single-receptor
+## models; they are fit and reported in 07's own figures and .xlsx, but they do
+## not get a column here.
+##
+## NOTE on the n row: M5 adds log_MME, which is missing for 5 subjects, so its
+## column is fit on fewer rows than M3 and M4 and its adj. R2 cannot be read
+## against theirs. The n row is in the table precisely so that is visible --
+## see 07_nested_regression.R section 18m.
 ##
 ## For SOWS the models come from MREG_MODELS_SOWS, which drops SOWS from the
-## right-hand side -- so Table 3 has no "SOWS withdrawal" predictor row. That
-## happens on its own here: the row is built, comes out all "--", and is
-## dropped by the empty-row filter in build_regression_table().
+## right-hand side if it is ever there. With the current M1-M5 set no model
+## contains SOWS, so Table 3 simply has no "SOWS withdrawal" predictor row.
 
 ## 07's fitted objects, not its .xlsx. Reading
 ## New_Outputs/multiple_regression_HT4_HT6/Stats_*.xlsx would be cheaper, but it
@@ -306,7 +308,7 @@ if (!exists("mreg_coef_tbl") || !exists("mreg_fit_tbl") || !exists("mreg_sows"))
 
 ## The three models, in column order. Named by KEY, not position, so reordering
 ## MREG_MODELS in 07 cannot silently change which models this table shows.
-REGTAB_MODELS <- c("HT4_HT6", "HT4_HT6_Int", "HT4_HT6_Cov_noMME")
+REGTAB_MODELS <- c("HT4_HT6", "HT4_HT6_ROEint", "HT4_HT6_ROEint_Cov")
 
 ## Builds one wide table: predictor rows, then one column per (group, model),
 ## then the n / adj. R2 / model p footer rows.

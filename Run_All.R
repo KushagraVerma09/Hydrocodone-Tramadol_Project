@@ -14,9 +14,10 @@
 ##   04  mediation analysis (single mediator, bootstrapped)
 ##   05  multivariable regression: NRS ~ ROE + each receptor
 ##   06  parallel multi-mediator SEM (lavaan)
-##   07  nested regression: NRS ~ log ROE + 5-HT4 / 5-HT6, including two
-##       adjusted models (sex, MQS non-opioid, log MME, SOWS, DOU); plus the
-##       same regression table with SOWS as the outcome
+##   07  nested regression: NRS ~ log ROE + 5-HT4 / 5-HT6 (M1-M5, including
+##       the two exposure x receptor interactions and one adjusted model:
+##       sex, log MME, MQS non-opioid); plus the same regression table with
+##       SOWS as the outcome
 ##   08  5-HT4 / 5-HT6 activity compared BETWEEN the two drug groups
 ##       (Welch t-tests, effect sizes, group-mean and difference CI figures)
 ##

@@ -196,11 +196,11 @@ MED_LABELS <- c(log_ROE = "log10 ROE",
                 R_5HT6  = "5-HT6 activity",
                 nrs     = "NRS pain",
                 PC2     = "PC2 pain quality",
-                ## 5-HT4 x 5-HT6 interaction terms (07_nested_regression.R
+                ## Exposure x receptor interaction terms (07_nested_regression.R
                 ## models M4/M5) -- added here so their axis titles/figure
                 ## titles read as English instead of the raw column name.
-                R_5HT4_x_5HT6          = "5-HT4 x 5-HT6 (raw interaction)",
-                R_5HT4_x_5HT6_centered = "5-HT4 x 5-HT6 (centered interaction)")
+                R_5HT4_x_ROE = "5-HT4 x log10 ROE",
+                R_5HT6_x_ROE = "5-HT6 x log10 ROE")
 med_lab <- function(v) if (!is.na(MED_LABELS[v])) unname(MED_LABELS[v]) else v
 
 ## ---- 7. SHARED FORMATTING HELPERS ---------------------------------------------
