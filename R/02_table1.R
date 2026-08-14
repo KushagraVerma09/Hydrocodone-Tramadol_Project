@@ -281,12 +281,17 @@ message("\nPublication table successfully formatted and saved to: ", normalizePa
 ## a gt .html/.docx). Table 2 predicts NRS pain, Table 3 predicts SOWS
 ## withdrawal.
 ##
-## Only THREE of 07's six models appear, by request -- positions 3, 4 and 6 of
-## MREG_MODELS:
+## Only THREE of 07's nine models appear, by request, selected BY KEY in
+## REGTAB_MODELS below (not by position, so 07 can gain or reorder models
+## without changing this table):
 ##   HT4_HT6            y ~ log_ROE + R_5HT4 + R_5HT6
 ##   HT4_HT6_Int        + R_5HT4 x R_5HT6
 ##   HT4_HT6_Cov_noMME  + sex + MQS non-opioid + SOWS + DOU
-## Position 5 (HT4_HT6_Cov) is deliberately left out: it adds log_MME, which is
+## 07's three ROE x receptor models (HT4_ROEx, HT6_ROEx, HT4_HT6_ROEx) are NOT
+## here for the same reason the other omitted models are not: this table was
+## specified as three columns per group. Add a key to REGTAB_MODELS to include
+## one.
+## HT4_HT6_Cov is deliberately left out: it adds log_MME, which is
 ## missing for 5 subjects, so it is fit on 13 rows rather than 17 and its
 ## adj. R2 / n cannot be read against the other two columns. That is the whole
 ## reason the no-MME twin exists (see 07_nested_regression.R section 18m).
