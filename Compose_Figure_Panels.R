@@ -82,16 +82,11 @@ WRITE_TIFF     <- TRUE      # the reference .docx files embed TIFF; set FALSE to
 
 FIGURE_PANELS <- list(
 
-  list(
-    name  = "Composite_Fig1_logMME_vs_outcomes",
-    title = "Figure 1.",
-    ncol  = 2,
-    files = c("Fig_logMME_vs_NRS_faceted.png",
-              "Fig_logMME_vs_PC1_faceted.png",
-              "Fig_logMME_vs_PC2_faceted.png",
-              "Fig_logMME_vs_PC3_faceted.png")
-  ),
-
+  ## logMME no longer gets a composite of its own. Only its NRS panel carried
+  ## the result worth showing, so that one panel rides along on the logROE
+  ## figure below as panel e; the three logMME PC panels are dropped from the
+  ## composites entirely (their single-panel PNGs are still written by the main
+  ## script and untouched in figs_stats_{header,corner}/).
   list(
     name  = "Composite_Fig2_logROE_vs_outcomes",
     title = "Figure 2.",
@@ -99,7 +94,9 @@ FIGURE_PANELS <- list(
     files = c("Fig_logROE_vs_NRS_faceted.png",
               "Fig_logROE_vs_PC1_faceted.png",
               "Fig_logROE_vs_PC2_faceted.png",
-              "Fig_logROE_vs_PC3_faceted.png")
+              "Fig_logROE_vs_PC3_faceted.png",
+              ## panel e -- the ex-Figure 1 panel a
+              "Fig_logMME_vs_NRS_faceted.png")
   ),
 
   list(
