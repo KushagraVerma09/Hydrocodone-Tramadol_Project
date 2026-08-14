@@ -1332,7 +1332,272 @@ write_xlsx(list(Per_group_regression = xy_slopes_tbl,
 message("\nMME/ROE vs NRS/PC1/PC2/PC3 figures and stats written to: ",
         normalizePath(OUT_DIR))
 
-## ---- 14a. CORNER-PLACEMENT AUDIT ---------------------------------------------
+
+################################################################################
+## 14a. THE TWO EXPOSURE MEASURES AGAINST EACH OTHER: MME (x) vs ROE (y)
+##      — Hydrocodone group vs Tramadol group
+##
+## Section 14 puts MME and ROE on the x axis SEPARATELY, against the clinical
+## outcomes. This asks the prior question: within a drug group, do the two
+## exposure measures track each other at all? A high correlation means they are
+## near-interchangeable and section 14's two rows of figures are telling one
+## story twice; a low one means they carry different information.
+##
+## BOTH SCALES ARE DRAWN, and they are not interchangeable:
+##   log-log : matches every other exposure figure in this file, but log10(0)
+##             is -Inf, so the subjects with ROE = 0 (4 per group) drop out.
+##   raw     : keeps those subjects, at the cost of a very skewed x and y.
+## Reporting only one would hide either 8 subjects or the skew, so both are
+## produced and the n is on every panel.
+##
+## Same conventions as section 14 throughout -- shared helpers, both stats
+## placements, faceted + overlay -- so these figures compose with the rest.
+################################################################################
+
+## Both members of a pair are exposure measures, so unlike section 14 the x is
+## not "the predictor" in any causal sense: this is a correlation, and the
+## slope is reported only because the stats helpers print it.
+##
+## show_slope: on the RAW scale the slope is ROE per mg/day of MME, i.e. about
+## 1.7e-04, which the shared stats helpers print as "slope = 0.00" -- a number
+## that says nothing and reads as a flat line. Those helpers' %.2f is calibrated
+## for every other figure in this file and is not worth changing for one panel,
+## so the raw figures print n / r / p instead and leave the slope to the
+## workbook, where it has room for its real magnitude. On the log-log scale the
+## slope IS meaningful at 2dp (it is an elasticity: a slope near 1 means ROE
+## rises proportionally with MME), so there it stays.
+MME_ROE_SCALES <- list(
+  list(xv = "MME",     yv = "ROE",     tag = "MME_vs_ROE",
+       xlab = "MME (mg/day)",
+       ylab = "ROE (mg/L)",
+       show_slope = FALSE),
+  list(xv = "log_MME", yv = "log_ROE", tag = "logMME_vs_logROE",
+       xlab = expression(log[10]~"MME (mg/day)"),
+       ylab = expression(log[10]~"ROE (mg/L)"),
+       show_slope = TRUE)
+)
+
+## Slope-free counterparts of stats_block / stats_line / stats_strip, used when
+## show_slope is FALSE. Same field order and same separators as the originals.
+stats_block_nos <- function(n, r, p)
+  sprintf("n = %d\nr = %.2f\np = %s", n, r, vapply(p, fmt_p, character(1)))
+stats_line_nos <- function(n, r, p)
+  sprintf("n = %d, r = %.2f, p = %s", n, r, vapply(p, fmt_p, character(1)))
+stats_strip_nos <- function(n, r, p)
+  sprintf("n = %d,  r = %.2f\np = %s", n, r, vapply(p, fmt_p, character(1)))
+
+## Fisher r-to-z: is the correlation in one group different from the other?
+## Two independent samples, so the z is the difference of the transformed r's
+## over the SE of that difference. Needs n > 3 per group to be defined.
+fisher_r_diff <- function(r1, n1, r2, n2) {
+  if (any(!is.finite(c(r1, r2))) || n1 < 4 || n2 < 4)
+    return(list(z = NA_real_, p = NA_real_))
+  zf <- function(r) 0.5 * log((1 + r) / (1 - r))
+  z  <- (zf(r1) - zf(r2)) / sqrt(1 / (n1 - 3) + 1 / (n2 - 3))
+  list(z = z, p = 2 * pnorm(-abs(z)))
+}
+
+mr_stats_all <- list()
+mr_tests_all <- list()
+
+for (sc in MME_ROE_SCALES) {
+
+  xv <- sc$xv; yv <- sc$yv; combo <- sc$tag
+
+  if (!all(c(xv, yv) %in% names(master))) {
+    message(sprintf("Skipping %s — column not found in master", combo)); next
+  }
+
+  ## is.finite() on BOTH, not just !is.na(): under the log scale the ROE = 0
+  ## subjects are -Inf rather than NA, and an -Inf would silently poison the
+  ## correlation and the axis range alike.
+  d <- master %>%
+    filter(Plot_Group %in% FOCUS_GROUPS,
+           is.finite(.data[[xv]]), is.finite(.data[[yv]])) %>%
+    mutate(Plot_Group = droplevels(factor(Plot_Group, levels = FOCUS_GROUPS)))
+
+  if (nlevels(d$Plot_Group) < 2 || any(table(d$Plot_Group) < 3)) {
+    message(sprintf("Skipping %s — fewer than 3 subjects in a group", combo)); next
+  }
+
+  ## ---- per-group correlation + regression -------------------------------------
+  mr_stats <- d %>%
+    group_by(Plot_Group) %>%
+    group_modify(~ {
+      ct  <- cor.test(.x[[xv]], .x[[yv]])                  # Pearson, with CI
+      sp  <- suppressWarnings(cor.test(.x[[xv]], .x[[yv]], method = "spearman"))
+      fit <- lm(.x[[yv]] ~ .x[[xv]])
+      tibble(n         = nrow(.x),
+             r         = unname(ct$estimate),
+             r_ci_lo   = ct$conf.int[1],
+             r_ci_hi   = ct$conf.int[2],
+             p         = ct$p.value,
+             rho       = unname(sp$estimate),
+             p_spearman = sp$p.value,
+             slope     = coef(fit)[2],
+             intercept = coef(fit)[1])
+    }) %>% ungroup() %>%
+    mutate(scale = combo,
+           mean_x = map_dbl(Plot_Group, ~ mean(d[[xv]][d$Plot_Group == .x])),
+           mean_y = map_dbl(Plot_Group, ~ mean(d[[yv]][d$Plot_Group == .x])),
+           label_text = if (sc$show_slope) stats_block(n, r, slope, p)
+                        else stats_block_nos(n, r, p),
+           stat_line  = if (sc$show_slope) stats_line(n, r, slope, p)
+                        else stats_line_nos(n, r, p),
+           stat_strip = if (sc$show_slope) stats_strip(n, r, slope, p)
+                        else stats_strip_nos(n, r, p))
+
+  ## Strip labels settled before the plot is built (see make_figure1).
+  d <- strip_facet_data(
+    d, "Plot_Group", as.character(mr_stats$Plot_Group),
+    if (stats_fit_one_line(mr_stats$stat_line, XY_W, 2))
+      mr_stats$stat_line else mr_stats$stat_strip)
+
+  ## ---- group comparisons --------------------------------------------------------
+  ## Two different questions, both worth having: the interaction F asks whether
+  ## the SLOPES differ (units of y per unit of x), Fisher's z asks whether the
+  ## CORRELATIONS differ (how tightly the two measures track, unit-free). A pair
+  ## of groups can easily differ on one and not the other.
+  m_add <- lm(d[[yv]] ~ d[[xv]] + d$Plot_Group)
+  m_int <- lm(d[[yv]] ~ d[[xv]] * d$Plot_Group)
+  av    <- anova(m_add, m_int)
+  fz    <- fisher_r_diff(mr_stats$r[1], mr_stats$n[1],
+                         mr_stats$r[2], mr_stats$n[2])
+
+  mr_tests <- tibble(
+    scale     = combo,
+    test      = c("Slope difference (x by Group interaction)",
+                  "Correlation difference (Fisher r-to-z)"),
+    statistic = c(av$F[2], fz$z),
+    df        = c(av$Df[2], NA_real_),
+    p_value   = c(av$`Pr(>F)`[2], fz$p)
+  )
+
+  mr_stats_all[[combo]] <- mr_stats
+  mr_tests_all[[combo]] <- mr_tests
+
+  cat(sprintf("\n===== %s: Hydrocodone vs Tramadol =====\n", combo))
+  print(as.data.frame(mr_stats %>%
+                        select(Plot_Group, n, r, r_ci_lo, r_ci_hi, p, rho, slope)),
+        row.names = FALSE, digits = 4)
+  cat("\n")
+  print(as.data.frame(mr_tests %>% select(test, statistic, df, p_value)),
+        row.names = FALSE, digits = 4)
+
+  ## ---- figures, one pair per stats placement ------------------------------------
+  for (sm in names(STATS_MODES)) {
+
+    ## ---- faceted figure --------------------------------------------------------
+    p_facet <- ggplot(d, aes(.data[[xv]], .data[[yv]],
+                             color = Plot_Group, shape = Plot_Group)) +
+      panel_axis_lines() +
+      geom_smooth(method = "lm", formula = y ~ x, se = TRUE, color = "grey30",
+                  linetype = "solid", linewidth = FIG_LINE_SIZE,
+                  fill = "grey80", alpha = 0.4) +
+      geom_point(size = FIG_POINT_SIZE, alpha = 0.85) +
+      scale_color_manual(values = custom_colors, labels = GROUP_LABELS) +
+      scale_shape_manual(values = custom_shapes) +
+      labs(x = sc$xlab, y = sc$ylab) +
+      theme_fig(faceted = TRUE)
+
+    if (sm == "header") {
+      p_facet <- p_facet + facet_wrap(~ .strip, labeller = label_parsed) +
+        theme(strip.text = element_text(face = "plain", size = FIG_STRIP_SIZE,
+                                        lineheight = 0.95,
+                                        margin = margin(b = 6, t = 2)))
+    } else {
+      bf     <- box_fracs(p_facet + facet_wrap(~ Plot_Group,
+                                     labeller = as_labeller(GROUP_LABELS)),
+                          XY_W, XY_H, mr_stats$label_text)
+      lp     <- place_corner_labels(d, "Plot_Group", xv, yv,
+                                    w_frac = bf[["w"]], h_frac = bf[["h"]])
+      audit_corner(paste0("Fig_", combo, "_faceted"), lp)
+      lab_df <- left_join(lp$coords, mr_stats, by = "Plot_Group")
+      p_facet <- p_facet +
+        facet_wrap(~ Plot_Group, labeller = as_labeller(GROUP_LABELS)) +
+        geom_label(data = lab_df, aes(x = lab_x, y = lab_y, label = label_text),
+                   inherit.aes = FALSE,
+                   hjust = lab_df$hjust, vjust = lab_df$vjust,
+                   size = FIG_ANNOT_SIZE, lineheight = FIG_ANNOT_LINEHEIGHT,
+                   family = FIG_FONT,
+                   fontface = FIG_ANNOT_FACE, color = FIG_ANNOT_COL, fill = "white",
+                   alpha = 1, linewidth = 0,
+                   label.padding = unit(FIG_ANNOT_PAD, "lines")) +
+        coord_cartesian(ylim = lp$ylim)
+    }
+
+    ggsave(fig_path(sm, paste0("Fig_", combo, "_faceted")),
+           p_facet, width = XY_W, height = XY_H, dpi = 300)
+
+    ## ---- overlay figure --------------------------------------------------------
+    p_overlay <- ggplot(d, aes(.data[[xv]], .data[[yv]],
+                               color = Plot_Group, shape = Plot_Group)) +
+      geom_point(alpha = 0.6, size = FIG_POINT_SIZE) +
+      geom_smooth(method = "lm", formula = y ~ x, se = TRUE, linetype = "solid",
+                  alpha = 0.15, linewidth = FIG_LINE_SIZE) +
+      scale_shape_manual(values = custom_shapes, guide = "none") +
+      labs(x = sc$xlab, y = sc$ylab, color = NULL, shape = NULL) +
+      theme_fig(faceted = FALSE, legend = "bottom")
+
+    if (sm == "header") {
+      key_labs <- setNames(paste0(glab(mr_stats$Plot_Group), ": ",
+                                  mr_stats$stat_line),
+                           as.character(mr_stats$Plot_Group))
+      p_overlay <- p_overlay +
+        scale_color_manual(values = custom_colors, labels = key_labs) +
+        guides(color = guide_legend(ncol = 1)) +
+        theme(legend.justification = "left",
+              legend.text          = element_text(size = FIG_STRIP_STATS,
+                                                  face = "plain"),
+              legend.margin        = margin(0, 0, 0, 0),
+              legend.box.margin    = margin(0, 0, 0, 0),
+              legend.key.spacing.y = unit(2, "pt"))
+    } else {
+      box <- paste(sprintf("%s: %s", glab(mr_stats$Plot_Group),
+                           mr_stats$stat_line), collapse = "\n")
+      bf  <- box_fracs(p_overlay, XYO_W, XYO_H, box)
+      lp  <- place_corner_labels(d %>% mutate(.all = factor("all")), ".all",
+                                 xv, yv, extent_var = "Plot_Group",
+                                 w_frac = bf[["w"]], h_frac = bf[["h"]])
+      audit_corner(paste0("Fig_", combo, "_overlay"), lp)
+      p_overlay <- p_overlay +
+        scale_color_manual(values = custom_colors, labels = GROUP_LABELS) +
+        annotate("label", x = lp$coords$lab_x[1], y = lp$coords$lab_y[1],
+                 hjust = lp$coords$hjust[1], vjust = lp$coords$vjust[1],
+                 label = box, size = FIG_ANNOT_SIZE,
+                 lineheight = FIG_ANNOT_LINEHEIGHT, family = FIG_FONT,
+                 fontface = FIG_ANNOT_FACE, color = FIG_ANNOT_COL, fill = "white",
+                 linewidth = 0, label.padding = unit(FIG_ANNOT_PAD, "lines")) +
+        coord_cartesian(ylim = lp$ylim)
+    }
+
+    ggsave(fig_path(sm, paste0("Fig_", combo, "_overlay")),
+           p_overlay, width = XYO_W, height = XYO_H, dpi = 300)
+  }
+}
+
+## ---- combined export -----------------------------------------------------------
+## No FDR here: two scales of the same two variables are not four independent
+## questions, they are one question asked twice, so adjusting across them would
+## be a penalty for reporting the sensitivity check rather than hiding it.
+if (length(mr_stats_all)) {
+  mr_stats_tbl <- bind_rows(mr_stats_all) %>%
+    select(scale, Plot_Group, n, mean_x, mean_y, r, r_ci_lo, r_ci_hi, p,
+           rho, p_spearman, slope, intercept)
+  mr_tests_tbl <- bind_rows(mr_tests_all) %>%
+    select(scale, test, statistic, df, p_value)
+
+  write_xlsx(list(Per_group_correlation = mr_stats_tbl,
+                  Group_comparisons     = mr_tests_tbl,
+                  Data_used             = master %>%
+                    filter(Plot_Group %in% FOCUS_GROUPS) %>%
+                    select(PIN, Plot_Group, MME, log_MME, ROE, log_ROE)),
+             file.path(OUT_DIR, "Stats_MME_vs_ROE.xlsx"))
+
+  message("\nMME vs ROE figures and stats written to: ", normalizePath(OUT_DIR))
+}
+
+## ---- 14b. CORNER-PLACEMENT AUDIT ---------------------------------------------
 ## Every figure in figs_stats_corner/ put its stats box somewhere; this reports
 ## whether any of them ended up over a data point or a confidence ribbon. The
 ## whole point of the corner placement is that this comes out zero.
