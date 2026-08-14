@@ -19,9 +19,17 @@
 ## .rtf if Word export fails) -- so running this file alone produces
 ## everything Table 1 needs, not just the raw .xlsx.
 ##
-## Run standalone: Rscript R/02_table1.R  (produces the .xlsx, .html and
-##   .docx together -- nothing else in the pipeline needs to run first)
-## Sourced by: Run_All.R.
+## Section 11 then adds TABLES 2 AND 3 in the same house style: the
+## multivariable regression models from 07_nested_regression.R, Hydrocodone and
+## Tramadol side by side. Those need 07's fitted objects, so this file is no
+## longer standalone-cheap -- see the dependency guard at section 11.
+##
+## Run standalone: Rscript R/02_table1.R  (produces Table 1's .xlsx/.html/.docx
+##   plus Tables 2 and 3; section 11 sources 07_nested_regression.R if its
+##   objects are not already in the session, which is slow -- 07 refits every
+##   model and redraws ~30 figures)
+## Sourced by: Run_All.R (which runs 07 BEFORE this file, so the guard below is
+##   already satisfied and 07 is not run twice).
 ###############################################################################
 
 .HTK_PROJECT_DIR <- "/Users/kushagraverma/Work/Projects/Hydrocodone+Tramadol_Project"
@@ -262,3 +270,230 @@ tryCatch(
 )
 
 message("\nPublication table successfully formatted and saved to: ", normalizePath(OUT_DIR))
+
+
+################################################################################
+## 11. TABLES 2 & 3 — Multivariable regression, Hydrocodone vs Tramadol
+################################################################################
+## Two publication tables built from 07_nested_regression.R's models, in the
+## same house style as Table 1 above (openxlsx .xlsx with gray "--" cells, plus
+## a gt .html/.docx). Table 2 predicts NRS pain, Table 3 predicts SOWS
+## withdrawal.
+##
+## Only THREE of 07's six models appear, by request -- positions 3, 4 and 6 of
+## MREG_MODELS:
+##   HT4_HT6            y ~ log_ROE + R_5HT4 + R_5HT6
+##   HT4_HT6_Int        + R_5HT4 x R_5HT6
+##   HT4_HT6_Cov_noMME  + sex + MQS non-opioid + SOWS + DOU
+## Position 5 (HT4_HT6_Cov) is deliberately left out: it adds log_MME, which is
+## missing for 5 subjects, so it is fit on 13 rows rather than 17 and its
+## adj. R2 / n cannot be read against the other two columns. That is the whole
+## reason the no-MME twin exists (see 07_nested_regression.R section 18m).
+##
+## For SOWS the models come from MREG_MODELS_SOWS, which drops SOWS from the
+## right-hand side -- so Table 3 has no "SOWS withdrawal" predictor row. That
+## happens on its own here: the row is built, comes out all "--", and is
+## dropped by the empty-row filter in build_regression_table().
+
+## 07's fitted objects, not its .xlsx. Reading
+## New_Outputs/multiple_regression_HT4_HT6/Stats_*.xlsx would be cheaper, but it
+## would silently serve the PREVIOUS run's numbers any time the models change,
+## because that file is written by a script that has not run yet in this
+## session. Same self-bootstrapping idiom as the config/data guards at the top.
+if (!exists("mreg_coef_tbl") || !exists("mreg_fit_tbl") || !exists("mreg_sows"))
+  source(file.path(.HTK_PROJECT_DIR, "R", "07_nested_regression.R"))
+
+## The three models, in column order. Named by KEY, not position, so reordering
+## MREG_MODELS in 07 cannot silently change which models this table shows.
+REGTAB_MODELS <- c("HT4_HT6", "HT4_HT6_Int", "HT4_HT6_Cov_noMME")
+
+## Builds one wide table: predictor rows, then one column per (group, model),
+## then the n / adj. R2 / model p footer rows.
+##
+## Returns a list rather than a bare data frame because the exporter needs to
+## know which columns belong to which group (for the spanners) and what the
+## repeated header labels are -- gt column IDs have to be unique, so the frame's
+## own names cannot carry that.
+build_regression_table <- function(coef_tbl, fit_tbl,
+                                   models     = REGTAB_MODELS,
+                                   groups     = FOCUS_GROUPS,
+                                   shorts     = MREG_MODEL_SHORT,
+                                   model_defs = MREG_MODELS) {
+
+  ## One column per group x model, group-major (all of Hydrocodone's models,
+  ## then all of Tramadol's). expand.grid varies its FIRST argument fastest,
+  ## which is what puts model inside group.
+  grid <- expand.grid(model = models, group = groups, stringsAsFactors = FALSE)
+  grid$id <- sprintf("G%d_M%d", match(grid$group, groups),
+                                match(grid$model, models))
+
+  ## Same term ordering as 07's table figure (07_nested_regression.R:816):
+  ## intercept first, then predictors in the order the models introduce them.
+  terms_order <- c("(Intercept)", unique(unlist(model_defs[models])))
+
+  ## "--" for a term the model does not contain, matching Table 1's convention
+  ## for a cell with no computable value (and picked up by the gray fill on
+  ## export). Coefficient + stars only, no standard error -- the .xlsx written
+  ## by 07 has se, CIs and standardized betas for anyone who needs them.
+  cell <- function(g, mk, tm) {
+    r <- coef_tbl[coef_tbl$group == g & coef_tbl$model == mk &
+                  coef_tbl$term == tm, ]
+    if (!nrow(r)) "--" else sprintf("%.3f%s", r$est[1], mreg_stars(r$p[1]))
+  }
+  fcell <- function(g, mk, fn) {
+    r <- fit_tbl[fit_tbl$group == g & fit_tbl$model == mk, ]
+    if (!nrow(r)) "--" else fn(r)
+  }
+
+  row_of <- function(label, f) {
+    out <- as.list(c(label, unlist(Map(f, grid$group, grid$model))))
+    names(out) <- c("Predictor", grid$id)
+    as_tibble(out)
+  }
+
+  body <- map(terms_order, function(tm)
+    ## mreg_lab() gives the pretty name ("5-HT4 activity"); it has no entry for
+    ## the intercept, so that one is spelled out, exactly as 07's figure does.
+    row_of(if (tm == "(Intercept)") "Intercept" else mreg_lab(tm),
+           function(g, mk) cell(g, mk, tm)))
+  body <- bind_rows(body)
+
+  ## Drop any predictor row that is "--" in all six columns. This is what
+  ## removes the SOWS row from Table 3 without a second term list.
+  keep <- apply(body[, grid$id, drop = FALSE], 1, function(r) any(r != "--"))
+  body <- body[keep, , drop = FALSE]
+
+  foot <- bind_rows(
+    row_of("n",       function(g, mk) fcell(g, mk, function(r) sprintf("%d", r$n[1]))),
+    row_of("adj. R2", function(g, mk) fcell(g, mk, function(r) sprintf("%.3f", r$adj_R2[1]))),
+    ## Model-level p: the overall F test, not a per-coefficient p.
+    row_of("model p", function(g, mk) fcell(g, mk, function(r) mreg_fmt_p(r$F_p[1])))
+  )
+
+  list(tbl    = bind_rows(body, foot),
+       grid   = grid,
+       groups = groups,
+       n_body = nrow(body),
+       ## MREG_MODEL_SHORT is hand-wrapped with "\n" for ggplot; neither gt nor
+       ## an .xlsx header cell wants a literal newline there.
+       hdr    = gsub("\n", " ", mreg_model_short(models, shorts)))
+}
+
+## Exports one built table both ways, step for step as Table 1 above: openxlsx
+## for the gray-filled .xlsx, gt for the .html/.docx with .rtf fallback.
+export_regression_table <- function(rt, base, title, subtitle) {
+  out <- as.data.frame(rt$tbl)
+  n_g <- length(rt$groups)
+  n_m <- length(rt$hdr)
+
+  ## ---- .xlsx ----------------------------------------------------------------
+  ## The model header labels repeat across the two groups, and a data frame
+  ## cannot carry duplicate names -- so the .xlsx qualifies each one with its
+  ## group instead of leaning on a spanner row it has no way to draw.
+  xl <- out
+  names(xl) <- c("Predictor", sprintf("%s: %s", rt$grid$group, rep(rt$hdr, n_g)))
+
+  wb2 <- createWorkbook()
+  addWorksheet(wb2, "Regression")
+  writeData(wb2, "Regression", xl)
+  for (col in seq_along(xl)) {
+    na_rows <- which(xl[[col]] == "--")
+    if (length(na_rows))
+      ## +1 for the header row written by writeData(), as above.
+      addStyle(wb2, "Regression", style = na_style,
+               rows = na_rows + 1, cols = col, gridExpand = TRUE, stack = TRUE)
+  }
+  saveWorkbook(wb2, file.path(OUT_DIR, paste0(base, ".xlsx")), overwrite = TRUE)
+
+  ## ---- publication .html / .docx --------------------------------------------
+  ## Column 1 is the predictor label; each group's block is the n_m columns
+  ## after it. Computed rather than hardcoded as 2:4 / 5:7 so adding a fourth
+  ## model to REGTAB_MODELS does not need an edit here.
+  gt_tbl <- gt(out) %>%
+    cols_align(align = "left",   columns = Predictor) %>%
+    cols_align(align = "center", columns = -Predictor) %>%
+    cols_label(.list = setNames(as.list(rep(rt$hdr, n_g)), rt$grid$id)) %>%
+    tab_header(title = title, subtitle = subtitle)
+
+  for (i in seq_len(n_g))
+    gt_tbl <- gt_tbl %>%
+      tab_spanner(label   = rt$groups[i],
+                  columns = 1 + (i - 1) * n_m + seq_len(n_m))
+
+  gt_tbl <- gt_tbl %>%
+    tab_style(style     = cell_text(weight = "bold"),
+              locations = cells_column_labels(everything())) %>%
+    ## The n / adj. R2 / model p block is model-level, not a coefficient --
+    ## italicised to read as a footer, the same way 07's table figure sets
+    ## those rows in italic.
+    tab_style(style     = cell_text(style = "italic"),
+              locations = cells_body(rows = seq_len(nrow(out)) > rt$n_body)) %>%
+    tab_footnote(
+      footnote  = paste0("Raw-unit regression coefficients; *** p < .001, ",
+                         "** p < .01, * p < .05. \"--\" marks a predictor the ",
+                         "model does not contain. Raw coefficients are not ",
+                         "comparable across predictors on different scales -- ",
+                         "see the 07 output folder for standardized betas and ",
+                         "confidence intervals."),
+      locations = cells_column_labels(columns = Predictor)) %>%
+    tab_footnote(
+      footnote  = paste0("Models are fit separately within each drug group, ",
+                         "not pooled with a group term. \"model p\" is the ",
+                         "overall F test for that column's model."),
+      locations = cells_column_labels(columns = rt$grid$id[1])) %>%
+    tab_options(
+      table.border.top.color            = "black",
+      table.border.top.width            = px(2),
+      table.border.bottom.color         = "black",
+      table.border.bottom.width         = px(2),
+      column_labels.border.top.color    = "black",
+      column_labels.border.top.width    = px(2),
+      column_labels.border.bottom.color = "black",
+      column_labels.border.bottom.width = px(2),
+      table_body.border.bottom.color    = "black",
+      table_body.border.bottom.width    = px(2),
+      table_body.hlines.color           = "transparent",
+      table_body.vlines.color           = "transparent"
+    )
+
+  gtsave(gt_tbl, file.path(OUT_DIR, paste0("Publication_", base, ".html")))
+  tryCatch(
+    gtsave(gt_tbl, file.path(OUT_DIR, paste0("Publication_", base, ".docx"))),
+    error = function(e) {
+      message("gtsave(.docx) failed (", conditionMessage(e),
+              ") — writing .rtf instead; Word opens it natively.")
+      gtsave(gt_tbl, file.path(OUT_DIR, paste0("Publication_", base, ".rtf")))
+    }
+  )
+  invisible(out)
+}
+
+## ---- Table 2: NRS -----------------------------------------------------------
+table2_nrs <- build_regression_table(mreg_coef_tbl, mreg_fit_tbl)
+
+cat("\n===== TABLE 2: NRS pain, multivariable regression =====\n")
+print(as.data.frame(table2_nrs$tbl), row.names = FALSE)
+
+export_regression_table(
+  table2_nrs, "Table2_Regression_NRS_HT4_HT6",
+  title    = "Table 2. NRS pain regressed on log10 ROE and 5-HT4 / 5-HT6 activity",
+  subtitle = "Raw-unit coefficients, fit separately within each drug group")
+
+## ---- Table 3: SOWS ----------------------------------------------------------
+## MREG_MODELS_SOWS / MREG_MODEL_SHORT_SOWS are the SOWS-specific model list and
+## headers from 07 section 18l -- SOWS is the outcome here, so it is not on the
+## right-hand side and must not be advertised in a header.
+table3_sows <- build_regression_table(
+  mreg_sows$coef, mreg_sows$fit,
+  shorts     = MREG_MODEL_SHORT_SOWS,
+  model_defs = MREG_MODELS_SOWS)
+
+cat("\n===== TABLE 3: SOWS withdrawal, multivariable regression =====\n")
+print(as.data.frame(table3_sows$tbl), row.names = FALSE)
+
+export_regression_table(
+  table3_sows, "Table3_Regression_SOWS_HT4_HT6",
+  title    = "Table 3. SOWS withdrawal regressed on log10 ROE and 5-HT4 / 5-HT6 activity",
+  subtitle = "Raw-unit coefficients, fit separately within each drug group")
+
+message("\nTables 2 and 3 (regression) saved to: ", normalizePath(OUT_DIR))

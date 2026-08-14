@@ -5,7 +5,9 @@
 ## order as the original single-file script:
 ##   00  shared config (paths, receptor sets, colors, text sizes, labels)
 ##   01  load + merge the five spreadsheets into `master`
-##   02  Table 1 (Hydrocodone vs Tramadol characteristics)
+##   02  Table 1 (Hydrocodone vs Tramadol characteristics), plus Tables 2 and 3
+##       (the 07 regression models, Hydrocodone vs Tramadol side by side) --
+##       which is why 07 is run before it below
 ##   03  Figure 1 / overlay figures, one per receptor set x outcome, plus the
 ##       demographics table, HT6 t-test, receptor-group-means and
 ##       exposure-vs-outcome figures
@@ -31,14 +33,21 @@
 PROJECT_DIR <- "/Users/kushagraverma/Work/Projects/Hydrocodone+Tramadol_Project"
 R_DIR       <- file.path(PROJECT_DIR, "R")
 
+## 07 runs BEFORE 02, out of numerical order and deliberately: 02 section 11
+## builds Tables 2 and 3 out of 07's fitted objects (mreg_coef_tbl, mreg_fit_tbl,
+## mreg_sows). 02's guard would source 07 itself if they were missing, but then
+## this loop would source 07 a SECOND time -- 07 has no idempotency guard, so
+## every model would be refit and all ~30 of its figures redrawn twice per run.
+## Running it first satisfies the guard instead. 07 is self-bootstrapping
+## (it sources 00 and 01 if needed), so nothing else has to move.
 scripts <- c("00_config.R",
              "01_load_data.R",
+             "07_nested_regression.R",
              "02_table1.R",
              "03_figures.R",
              "04_mediation_single.R",
              "05_multivariable_regression.R",
              "06_parallel_mediation_sem.R",
-             "07_nested_regression.R",
              "08_ht4_ht6_group_ttests.R")
 
 for (s in scripts) {
