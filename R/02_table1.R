@@ -1,13 +1,12 @@
 ###############################################################################
 ## 02_table1.R
 ##
-## Table 1: Hydrocodone vs Tramadol characteristics table, with CBP-O and
-## Healthy reference columns appended AFTER the p-value. Column order:
-##   Characteristic | Hydrocodone | Tramadol | p-value | CBP-O | Healthy
-## The p-value compares the two opioid groups ONLY -- CBP-O and Healthy are
-## descriptive reference columns and never enter that test (build_
-## characteristics_table's add_p = FALSE for both, plus the 2-group guard
-## inside it, are what enforce this).
+## Table 1: Hydrocodone vs Tramadol characteristics table, with a CBP-O
+## reference column appended AFTER the p-value. Column order:
+##   Characteristic | Hydrocodone | Tramadol | p-value | CBP-O
+## The p-value compares the two opioid groups ONLY -- CBP-O is a descriptive
+## reference column and never enters that test (build_characteristics_table's
+## add_p = FALSE, plus the 2-group guard inside it, are what enforce this).
 ##
 ## Cells with no computable value ("--" -- see fmt_msd/fmt_npct/fmt_p) are
 ## filled gray in the exported .xlsx. write_xlsx (writexl) can't style cells,
@@ -37,7 +36,7 @@ if (!"openxlsx" %in% rownames(installed.packages())) install.packages("openxlsx"
 library(openxlsx)
 
 ################################################################################
-## 6. TABLE 1 — Hydrocodone vs Tramadol Characteristics (+ CBP-O / Healthy refs)
+## 6. TABLE 1 — Hydrocodone vs Tramadol Characteristics (+ CBP-O ref)
 ################################################################################
 
 fmt_msd <- function(x, d = 2) {
@@ -152,35 +151,29 @@ build_characteristics_table <- function(df, gvar = "Group", groups = c("CBP-O", 
 # 1. Build the target table: Hydrocodone vs Tramadol ONLY, with a p-value.
 #    build_characteristics_table filters to FOCUS_GROUPS before p_cont/p_cat
 #    ever run, and its add_p = TRUE guard requires exactly 2 groups -- CBP-O
-#    and Healthy (built next) cannot reach this test, by construction, not
-#    just by convention. Column order out of this call is already
+#    (built next) cannot reach this test, by construction, not just by
+#    convention. Column order out of this call is already
 #    Characteristic | Hydrocodone | Tramadol | p-value, which is exactly
 #    where the p-value belongs, so nothing below needs to reorder it.
 table1_hydro_tram <- build_characteristics_table(
   master, "Plot_Group", FOCUS_GROUPS
 )
 
-# 2. Reference columns, each descriptive only (add_p = FALSE: no test, so
-#    these never influence or get influenced by the Hydrocodone/Tramadol
-#    p-value above). Group == "H" is coded "H" in the raw data (01_load_data.R)
-#    -- display_names relabels just the header to "Healthy" without changing
-#    what's filtered on.
+# 2. Reference column, descriptive only (add_p = FALSE: no test, so this
+#    never influences or is influenced by the Hydrocodone/Tramadol p-value
+#    above).
 table1_cbpo <- build_characteristics_table(
   master, "Group", c("CBP-O"), add_p = FALSE
 )
-table1_healthy <- build_characteristics_table(
-  master, "Group", c("H"), add_p = FALSE, display_names = c(H = "Healthy")
-)
 
-# 3. Append the reference columns AFTER the p-value:
-#    Characteristic | Hydrocodone | Tramadol | p-value | CBP-O | Healthy
+# 3. Append the reference column AFTER the p-value:
+#    Characteristic | Hydrocodone | Tramadol | p-value | CBP-O
 table1_hydro_tram <- bind_cols(
   table1_hydro_tram,
-  table1_cbpo[, 2],       # "CBP-O (n=...)"
-  table1_healthy[, 2]     # "Healthy (n=...)"
+  table1_cbpo[, 2]        # "CBP-O (n=...)"
 )
 
-cat("\n===== TABLE 1: Hydrocodone vs Tramadol (with CBP-O / Healthy references) =====\n")
+cat("\n===== TABLE 1: Hydrocodone vs Tramadol (with CBP-O reference) =====\n")
 print(as.data.frame(table1_hydro_tram), row.names = FALSE)
 
 ## ---- Export, with "--" (no computable value) cells filled gray --------------
@@ -220,11 +213,11 @@ pub_table <- table_data %>%
   gt() %>%
   cols_align(align = "left", columns = Characteristic) %>%
   cols_align(align = "center", columns = -Characteristic) %>%
-  ## Column order is Characteristic | Hydrocodone | Tramadol | p-value | CBP-O
-  ## | Healthy, matching table1_hydro_tram above. Adding, removing, or
-  ## reordering a column there means updating the indices below too.
+  ## Column order is Characteristic | Hydrocodone | Tramadol | p-value | CBP-O,
+  ## matching table1_hydro_tram above. Adding, removing, or reordering a
+  ## column there means updating the indices below too.
   tab_spanner(label = "Opioid subgroup comparison", columns = 2:3) %>%
-  tab_spanner(label = "Reference group",            columns = 5:6) %>%
+  tab_spanner(label = "Reference group",            columns = 5) %>%
   tab_style(
     style = cell_text(weight = "bold"),
     locations = cells_column_labels(everything())
@@ -238,8 +231,8 @@ pub_table <- table_data %>%
   ) %>%
   tab_footnote(
     footnote = paste0("p-values compare ", FOCUS_GROUPS[1], " vs ", FOCUS_GROUPS[2],
-                      " only. The CBP-O and Healthy columns are descriptive ",
-                      "reference groups and are not included in the test."),
+                      " only. The CBP-O column is a descriptive reference ",
+                      "group and is not included in the test."),
     locations = cells_column_labels(columns = `p-value`)
   ) %>%
   tab_options(
