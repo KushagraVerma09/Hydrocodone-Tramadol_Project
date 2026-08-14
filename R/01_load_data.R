@@ -177,15 +177,39 @@ compute_x_value <- function(data, receptor_subset, scale_mode = X_MODE) {
 ## Back-compatible alias so older calls still work
 compute_disease_axis <- compute_x_value
 
-## Human-readable x-axis label for a given receptor set.
+## Receptor-set key -> the receptor name(s) as they should READ on a figure.
 ##
-## Deliberately SHORT and free of em dashes: 03_figures.R no longer wraps axis
-## titles, so this has to fit on one line at FIG_AXIS_TITLE, and the figures use
-## a colon wherever the old text used an em dash.
+## Two things happen here. Every serotonin receptor gets its "5" back
+## ("HT4" -> "5HT4"), because "HT4" on its own is not the receptor's name. And
+## the structural words in the key become symbols ("HT6_plus_HT4" ->
+## "5HT6 + 5HT4"), so the label is the receptor list and nothing else.
+##
+## This is a RENDER-time map only, exactly like GROUP_LABELS in 00_config.R:
+## receptor_sets below, every output filename, and every sheet/column name stay
+## keyed on the raw names, so nothing downstream can break on it.
+receptor_set_label <- function(rs_name) {
+  ## Sets that are a count rather than a list of receptors -- naming all 15, or
+  ## all six, on an axis would not fit and would not be read.
+  special <- c(All_Receptors = "All Receptors",
+               Six_Specified = "Six Receptors")
+  if (rs_name %in% names(special)) return(unname(special[rs_name]))
+
+  toks <- strsplit(rs_name, "_", fixed = TRUE)[[1]]
+  toks <- toks[!toks %in% c("Only", "plus", "and")]  # joiners, not receptors
+  ## "HT1A" -> "5HT1A"; an already-prefixed "5HT1A" is left alone.
+  toks <- sub("^5?HT", "5HT", toks)
+  paste(toks, collapse = " + ")
+}
+
+## Human-readable x-axis title for a given receptor set: "<receptors> Activity",
+## e.g. "5HT6 + 5HT4 Activity", "MOR Activity", "All Receptors Activity".
+##
+## Deliberately SHORT: 03_figures.R no longer wraps axis titles, so this has to
+## fit on one line at FIG_AXIS_TITLE.
 x_axis_label <- function(rs_name) {
-  pretty <- gsub("_", " ", rs_name)   # "HT6_plus_HT4" -> "HT6 plus HT4"
+  pretty <- receptor_set_label(rs_name)
   if (X_MODE == "raw")
-    paste0("Receptor activity: ", pretty)
+    paste0(pretty, " Activity")
   else
     paste0("Disease Axis (0 = Healthy, 1 = CBP-O): ", pretty)
 }
