@@ -105,7 +105,8 @@
 ################################################################################
 
 .HTK_PROJECT_DIR <- "/Users/kushagraverma/Work/Projects/Hydrocodone+Tramadol_Project"
-if (!exists(".HTK_CONFIG_LOADED")) source(file.path(.HTK_PROJECT_DIR, "R", "00_config.R"))
+## Always re-sourced -- see the note above this line in 01_load_data.R.
+source(file.path(.HTK_PROJECT_DIR, "R", "00_config.R"))
 if (!exists("master"))              source(file.path(.HTK_PROJECT_DIR, "R", "01_load_data.R"))
 
 ## ---- 18a. CONFIG -------------------------------------------------------------
