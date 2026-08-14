@@ -101,11 +101,11 @@ MIN_N_SLOPE <- 5   # groups smaller than this are dropped from slope models
 ## stay legible). Everything that used to be bold-and-large -- caption, strip
 ## stats -- is now plain, which is what stops the figures reading as uniformly
 ## shouty.
-TEXT_SCALE       <- 2
+TEXT_SCALE       <- 4
 FIG_BASE_SIZE    <- 13   * TEXT_SCALE   # theme base size            (26pt)
-FIG_AXIS_TITLE   <- 13   * TEXT_SCALE   # x / y axis titles          (26pt)
-FIG_AXIS_TEXT    <- 11   * TEXT_SCALE   # tick labels                (22pt)
-FIG_STRIP_SIZE   <- 12   * TEXT_SCALE   # facet strip: group name, bold (24pt)
+FIG_AXIS_TITLE   <- 12   * TEXT_SCALE   # x / y axis titles          (26pt)
+FIG_AXIS_TEXT    <- 10   * TEXT_SCALE   # tick labels                (22pt)
+FIG_STRIP_SIZE   <- 10   * TEXT_SCALE   # facet strip: group name, bold (24pt)
 FIG_STRIP_STATS  <- 9    * TEXT_SCALE   # n / r / slope line beneath it, plain
 ## NOT bumped, deliberately. The caption is now a single horizontal line, and at
 ## 18pt the logROE caption measures 11.7 in against an 11 in overlay figure, so it
@@ -113,10 +113,10 @@ FIG_STRIP_STATS  <- 9    * TEXT_SCALE   # n / r / slope line beneath it, plain
 ## rewrite was meant to save. At 16pt it measures 10.4 in and fits on one line on
 ## every figure size in use (13/12/11 in). The caption is also the text that least
 ## needs to be readable from a distance; the ticks and titles got the lift instead.
-FIG_CAPTION_SIZE <- 8    * TEXT_SCALE   # t-test / slope caption under the plot
+FIG_CAPTION_SIZE <- 1    * TEXT_SCALE   # t-test / slope caption under the plot
 FIG_ANNOT_SIZE   <- 3.0  * TEXT_SCALE   # in-panel stats box (geom_label, mm)
-FIG_POINT_SIZE   <- 2.1  * TEXT_SCALE   # scatter point size
-FIG_LINE_SIZE    <- 0.75 * TEXT_SCALE   # regression / best-fit line width
+FIG_POINT_SIZE   <- 5.1  * TEXT_SCALE   # scatter point size
+FIG_LINE_SIZE    <- 2.4  * TEXT_SCALE   # regression / best-fit line width (bolder/thicker)
 FIG_CAPTION_COL  <- "grey25"            # caption colour: present, not shouting
 
 ## ---- 3b. FLOATING-AXIS STYLING + IN-PANEL ANNOTATION -------------------------
@@ -124,8 +124,8 @@ FIG_CAPTION_COL  <- "grey25"            # caption colour: present, not shouting
 ## bottom and left axis line with outward-facing ticks, so nothing competes with
 ## the data. theme_fig() in 03_figures.R is the only consumer.
 FIG_FONT          <- "sans"            # ONE family for theme AND annotations
-FIG_AXIS_LINE     <- 1.1               # bottom/left axis line width
-FIG_TICK_LINE     <- 0.9               # tick mark width
+FIG_AXIS_LINE     <- 20               # bottom/left axis line width (bolder/thicker)
+FIG_TICK_LINE     <- 8                # tick mark width (bolder/thicker)
 FIG_TICK_LEN      <- unit(0.22, "cm")  # POSITIVE = ticks point OUTWARD
 FIG_AXIS_TEXT_COL <- "grey15"          # tick labels: near-black, high contrast
 
