@@ -414,24 +414,28 @@ stats_fit_one_line <- function(txt, fig_w, n_panels) {
 ## are the two that carry information -- a bold bottom x-axis and left y-axis with
 ## outward-facing ticks. Everything the data doesn't need is gone.
 ##
-## Note what removing panel.border means for a faceted figure: facet_wrap renders
-## the y axis on the LEFT COLUMN only, so in the 1x2 figures the right panel has no
-## left-hand rule. That is the intended shared-axis look, not a missing element.
-## With no border and no gridlines, panel.spacing is the only thing separating the
-## panels, which is why it is wider than ggplot's default.
+## For a FACETED figure the axis.line theme element is switched off here and
+## drawn per panel instead, via panel_axis_lines() (added by the caller as a
+## geom layer). axis.line.x.bottom/axis.line.y.left are genuinely outer-edge-only
+## elements in ggplot2 -- in a facet_wrap they draw on the left column and bottom
+## row of the WHOLE layout, not on every panel -- so in a 1x2 figure the right
+## ("CBP+T") panel used to get only its bottom rule and no left-hand one: a full
+## "L" axis on the left panel, a bare "_" on the right. panel_axis_lines() gives
+## every panel both strokes.
 theme_fig <- function(faceted = TRUE, legend = "none") {
   th <- theme_minimal(base_size = FIG_BASE_SIZE, base_family = FIG_FONT) +
     theme(
       panel.grid         = element_blank(),   # no major, no minor
       panel.border       = element_blank(),   # no top/right box
-      axis.line.x.bottom = element_line(colour = "black", linewidth = FIG_AXIS_LINE,
-                                        lineend = "square"),
-      axis.line.y.left   = element_line(colour = "black", linewidth = FIG_AXIS_LINE,
-                                        lineend = "square"),
+      axis.line.x.bottom = if (faceted) element_blank() else
+        element_line(colour = "black", linewidth = FIG_AXIS_LINE, lineend = "square"),
+      axis.line.y.left   = if (faceted) element_blank() else
+        element_line(colour = "black", linewidth = FIG_AXIS_LINE, lineend = "square"),
       axis.ticks         = element_line(colour = "black", linewidth = FIG_TICK_LINE),
       axis.ticks.length  = FIG_TICK_LEN,      # positive length => points outward
       axis.title         = element_text(size = FIG_AXIS_TITLE, colour = "black"),
-      axis.text          = element_text(size = FIG_AXIS_TEXT, colour = FIG_AXIS_TEXT_COL),
+      axis.text          = element_text(size = FIG_AXIS_TEXT, colour = FIG_AXIS_TEXT_COL,
+                                        face = "bold"),
       legend.position    = legend,
       legend.text        = element_text(size = FIG_STRIP_STATS),
       ## A bottom legend otherwise sits on a wide band of its own padding, which
@@ -439,9 +443,6 @@ theme_fig <- function(faceted = TRUE, legend = "none") {
       ## title and the keys. Header mode overrides these again for its long keys.
       legend.box.spacing = unit(0.3, "lines"),
       legend.margin      = margin(0, 0, 0, 0),
-      plot.caption       = element_text(hjust = 0, size = FIG_CAPTION_SIZE,
-                                        colour = FIG_CAPTION_COL, face = "plain",
-                                        lineheight = 1.05, margin = margin(t = 4)),
       plot.margin        = margin(4, 8, 2, 4),
       panel.spacing      = unit(1.1, "lines")
     )
@@ -455,6 +456,25 @@ theme_fig <- function(faceted = TRUE, legend = "none") {
                                 margin = margin(b = 3, t = 1))
     )
   th
+}
+
+## Draws a left + bottom axis rule (an "L") in EVERY facet panel, using -Inf/Inf
+## endpoints so each one lands exactly on that panel's own rendered range --
+## fixed-scale, free-scale, or expanded by coord_cartesian(ylim = ...) for the
+## corner stats box, it doesn't matter which, the segment still lands on the
+## edge. annotate() (rather than geom_segment + a dummy data frame) is what
+## replicates the same segment into every panel without a spurious "aesthetics
+## recycled" warning.
+## Companion to theme_fig(faceted = TRUE), which blanks the normal (outer-edge-
+## only) axis.line element so this doesn't draw a double-thickness line on the
+## panel that used to get the real one.
+panel_axis_lines <- function() {
+  list(
+    annotate("segment", x = -Inf, xend = -Inf, y = -Inf, yend = Inf,
+             colour = "black", linewidth = FIG_AXIS_LINE, lineend = "square"),
+    annotate("segment", x = -Inf, xend = Inf, y = -Inf, yend = -Inf,
+             colour = "black", linewidth = FIG_AXIS_LINE, lineend = "square")
+  )
 }
 
 ## One line, for a facet strip and for the overlay legend keys. Single-spaced
@@ -661,6 +681,7 @@ make_figure1 <- function(data, yvar, ylab, tag,
 
   p <- ggplot(plot_data, aes(x = X_disease, y = .data[[yvar]],
                              color = Plot_Group, shape = Plot_Group)) +
+    panel_axis_lines() +
     healthy_line(ref_x) +
     geom_smooth(method = "lm", formula = y ~ x, se = TRUE, color = "grey30",
                 linetype = "solid", linewidth = FIG_LINE_SIZE,
@@ -670,9 +691,9 @@ make_figure1 <- function(data, yvar, ylab, tag,
     scale_shape_manual(values = custom_shapes) +
     ## Titles are NOT wrapped: OUTCOMES and x_axis_label() are short enough to fit
     ## on one line, which is what keeps the axis furniture -- and so the panel --
-    ## the same size on every figure.
-    labs(x = x_axis_label(rs_name), y = ylab,
-         caption = fit_caption(paste0(tt$label, healthy_line_note(ref_x)), FIG1_W)) +
+    ## the same size on every figure. No caption: the n / r / slope / p and t-test
+    ## stats stay in the in-panel box / strip (stats_mode), nothing below the plot.
+    labs(x = x_axis_label(rs_name), y = ylab) +
     theme_fig(faceted = TRUE)
 
   if (stats_mode == "header") {
@@ -738,9 +759,7 @@ make_overlay <- function(data, yvar, ylab, tag, file_stub = NULL,
     ## Both groups are circles now, so a shape legend would only repeat the
     ## colour legend.
     scale_shape_manual(values = custom_shapes, guide = "none") +
-    labs(x = x_axis_label(rs_name), y = ylab,
-         color = NULL, shape = NULL,
-         caption = fit_caption(paste0(tt$label, healthy_line_note(ref_x)), OVL_W)) +
+    labs(x = x_axis_label(rs_name), y = ylab, color = NULL, shape = NULL) +
     theme_fig(faceted = FALSE, legend = "bottom")
 
   if (stats_mode == "header") {
@@ -1193,13 +1212,15 @@ for (pr in PREDICTORS) {
       ## ---- faceted figure ----------------------------------------------------
       p_facet <- ggplot(d, aes(.data[[xv]], .data[[yv]],
                                color = Plot_Group, shape = Plot_Group)) +
+        panel_axis_lines() +
         geom_smooth(method = "lm", formula = y ~ x, se = TRUE, color = "grey30",
                     linetype = "solid", linewidth = FIG_LINE_SIZE,
                     fill = "grey80", alpha = 0.4) +
         geom_point(size = FIG_POINT_SIZE, alpha = 0.85) +
         scale_color_manual(values = custom_colors, labels = GROUP_LABELS) +
         scale_shape_manual(values = custom_shapes) +
-        labs(x = xlab, y = yl, caption = fit_caption(cap, XY_W)) +
+        ## No caption: stats stay in the in-panel box / strip, nothing below the plot.
+        labs(x = xlab, y = yl) +
         theme_fig(faceted = TRUE)
 
       if (sm == "header") {
@@ -1239,8 +1260,7 @@ for (pr in PREDICTORS) {
         geom_smooth(method = "lm", formula = y ~ x, se = TRUE, linetype = "solid",
                     alpha = 0.15, linewidth = FIG_LINE_SIZE) +
         scale_shape_manual(values = custom_shapes, guide = "none") +
-        labs(x = xlab, y = yl, color = NULL, shape = NULL,
-             caption = fit_caption(cap, XYO_W)) +
+        labs(x = xlab, y = yl, color = NULL, shape = NULL) +
         theme_fig(faceted = FALSE, legend = "bottom")
 
       if (sm == "header") {

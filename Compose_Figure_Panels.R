@@ -21,6 +21,7 @@
 ##   source("Compose_Figure_Panels.R")
 ###############################################################################
 
+
 ## ---- 0. PACKAGES -------------------------------------------------------------
 pkgs <- c("magick", "officer")
 missing <- pkgs[!pkgs %in% rownames(installed.packages())]
