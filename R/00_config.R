@@ -20,9 +20,19 @@
 ## values instead of redefining or falling back to defaults.
 ###############################################################################
 
-## Guard: sourcing this file twice (e.g. once directly, once via Run_All.R)
-## is harmless but wasteful -- skip the body if it already ran.
-if (!exists(".HTK_CONFIG_LOADED")) {
+## Guard: this ONLY wraps the expensive, side-effecting package-install/load
+## step, so sourcing this file twice (e.g. once directly, once via Run_All.R)
+## doesn't repeat that work. It deliberately does NOT wrap anything below --
+## paths, styling constants, labels -- because those are cheap to redefine and
+## because gating them on "already loaded" is exactly what used to make an
+## edit to a value below (e.g. FIG_AXIS_LINE) invisible for the rest of an R
+## session: once .HTK_CONFIG_LOADED was TRUE, re-sourcing this file (directly,
+## or via the `if (!exists(".HTK_CONFIG_LOADED")) source(...)` guard at the
+## top of every other script) was a no-op, so a config edit only took effect
+## after restarting R. Every value below is now always re-evaluated on every
+## source(), so an edit here shows up the next time a script re-sources this
+## file -- no R restart required.
+if (!exists(".HTK_PKGS_LOADED")) {
 
 ## ---- 0. PACKAGES -------------------------------------------------------------
 pkgs <- c("readxl", "writexl", "dplyr", "tidyr", "stringr",
@@ -32,6 +42,10 @@ if (length(missing)) install.packages(missing)
 invisible(lapply(pkgs, library, character.only = TRUE))
 
 set.seed(42)
+
+.HTK_PKGS_LOADED <- TRUE
+
+}  ## end packages-only guard
 
 ## ---- 1. PATHS ------------------------------------------------------------
 ## PROJECT_DIR is the only hardcoded absolute path in the whole pipeline --
@@ -201,6 +215,15 @@ fmt_p <- function(p) {
   sprintf("%.3f", p)
 }
 
+## Kept only as a flag OTHER code can check to confirm this file has been
+## sourced (nothing left in this file gates on it -- see the note at the
+## top). The per-script guards that used to read `if (!exists(".HTK_CONFIG_
+## LOADED")) source("00_config.R")` were removed for the same reason: that
+## guard was what made an edit here invisible until R was restarted, because
+## it skipped re-sourcing entirely once this flag was set. 01_load_data.R,
+## 02_table1.R, 03_figures.R, 04_mediation_single.R,
+## 05_multivariable_regression.R, 06_parallel_mediation_sem.R,
+## 07_nested_regression.R, and 08_ht4_ht6_group_ttests.R now source this file
+## unconditionally -- cheap, since the only expensive part (packages, above)
+## still guards itself.
 .HTK_CONFIG_LOADED <- TRUE
-
-}  ## end guard

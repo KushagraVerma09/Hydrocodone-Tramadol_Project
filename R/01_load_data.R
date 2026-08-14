@@ -14,7 +14,11 @@
 ###############################################################################
 
 .HTK_PROJECT_DIR <- "/Users/kushagraverma/Work/Projects/Hydrocodone+Tramadol_Project"
-if (!exists(".HTK_CONFIG_LOADED")) source(file.path(.HTK_PROJECT_DIR, "R", "00_config.R"))
+## Always re-sourced (not gated on .HTK_CONFIG_LOADED): 00_config.R now
+## re-evaluates its own values on every source() and only guards its one
+## expensive step (packages) internally, so this stays cheap even when several
+## 0N_*.R scripts each source it in the same R session -- see 00_config.R.
+source(file.path(.HTK_PROJECT_DIR, "R", "00_config.R"))
 
 ## ---- 2. LOAD + HARMONISE -----------------------------------------------------
 
