@@ -355,21 +355,26 @@ text_width_in <- function(txt, size_pt, face = "plain") {
   grid::convertWidth(grid::grobWidth(g), "in", valueOnly = TRUE)
 }
 
-## Facet strip carrying a bold group name above a smaller, plain stats line.
+## Facet strip carrying a bold group name above a plain stats line, both at the
+## SAME size (FIG_STRIP_SIZE) -- matching the group name is the point, not an
+## independent size, so there is nothing left here for FIG_STRIP_STATS to
+## drive; that constant only sizes the overlay legend text now (see theme_fig).
 ##
-## ggplot styles a strip with ONE element_text, so two sizes/weights in one strip
+## ggplot styles a strip with ONE element_text, so two weights in one strip
 ## normally needs ggtext. plotmath does it without the dependency: atop() stacks
-## the lines, bold() weights the first, and scriptstyle() shrinks the second to
-## about 0.8x. The catch is that a lookup vector passed to labeller() is never
-## parsed, so the panels are faceted on a column whose LEVELS are the plotmath
-## strings and label_parsed is applied to those.
+## the lines and bold() weights the first. (An earlier version wrapped the
+## second line in scriptstyle(), which is a FIXED ~0.71x plotmath scale --
+## constant regardless of FIG_STRIP_STATS -- and is why that config value used
+## to look like it did nothing.) The catch is that a lookup vector passed to
+## labeller() is never parsed, so the panels are faceted on a column whose
+## LEVELS are the plotmath strings and label_parsed is applied to those.
 ## `stats_txt` may contain newlines; each becomes another stacked atop() line.
 strip_math <- function(name, stats_txt) {
   ## Quotes would end the plotmath string early; nothing else needs escaping.
   clean <- function(s) gsub('"', "", s, fixed = TRUE)
   vapply(seq_along(name), function(i) {
     lines <- strsplit(clean(stats_txt[i]), "\n", fixed = TRUE)[[1]]
-    inner <- sprintf('scriptstyle(plain("%s"))', lines)
+    inner <- sprintf('plain("%s")', lines)
     body  <- inner[length(inner)]
     for (k in rev(seq_len(length(inner) - 1)))
       body <- sprintf("atop(%s, %s)", inner[k], body)
@@ -379,9 +384,10 @@ strip_math <- function(name, stats_txt) {
 
 ## Add the plotmath strip column to `plot_data`, ready for
 ## facet_wrap(~ .strip, labeller = label_parsed).
-## glab() shortens the DISPLAYED group name ("Hydrocodone group" -> "CBP+H"); the
-## lookup vector stays NAMED by the real group values, so the facet still keys on
-## the data and only the strip text changes.
+## glab() relabels the DISPLAYED group name ("Hydrocodone group" -> "CBP+Hydrocodone",
+## per GROUP_LABELS in 00_config.R); the lookup vector stays NAMED by the real
+## group values, so the facet still keys on the data and only the strip text
+## changes.
 strip_facet_data <- function(plot_data, gvar, names_in_order, stats_txt) {
   labs_v <- setNames(strip_math(glab(names_in_order), stats_txt), names_in_order)
   plot_data$.strip <- factor(labs_v[as.character(plot_data[[gvar]])],
@@ -401,10 +407,13 @@ strip_facet_data <- function(plot_data, gvar, names_in_order, stats_txt) {
 ## under-reads by about 0.12 in, which is the margin the 0.97 below allows for.
 strip_budget_in <- function(fig_w, n_panels) max((fig_w - 1.9) / n_panels, 1)
 
-## TRUE if every stats line fits on one strip line. scriptstyle() renders at
-## about 0.8x, which is the size these are measured at.
+## TRUE if every stats line fits on one strip line. The stats line now renders
+## at the same size as the group name (FIG_STRIP_SIZE, no scriptstyle shrink
+## -- see strip_math()), so it must be measured at that same size or this
+## under-estimates its width and lets text that will actually clip pass as
+## "fits on one line".
 stats_fit_one_line <- function(txt, fig_w, n_panels) {
-  all(vapply(txt, text_width_in, numeric(1), FIG_STRIP_SIZE * 0.8) <
+  all(vapply(txt, text_width_in, numeric(1), FIG_STRIP_SIZE) <
         0.97 * strip_budget_in(fig_w, n_panels))
 }
 
@@ -1203,7 +1212,7 @@ for (pr in PREDICTORS) {
         theme_fig(faceted = TRUE)
 
       if (sm == "header") {
-        ## Bold group name over a smaller, plain stats line; the weights come
+        ## Bold group name over a plain stats line, same size; the weights come
         ## from the plotmath label, so the strip element itself is plain.
         p_facet <- p_facet + facet_wrap(~ .strip, labeller = label_parsed) +
           theme(strip.text = element_text(face = "plain", size = FIG_STRIP_SIZE,

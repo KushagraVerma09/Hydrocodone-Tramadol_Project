@@ -151,7 +151,7 @@ FOCUS_GROUPS <- c("Hydrocodone group", "Tramadol group")
 custom_colors <- setNames(c("#1b9e77", "#d95f02")[seq_along(FOCUS_GROUPS)], FOCUS_GROUPS)
 custom_shapes <- setNames(rep(16, length(FOCUS_GROUPS)), FOCUS_GROUPS)
 
-## Short group names for FIGURES ONLY.
+## Group names for FIGURES ONLY.
 ##
 ## The DATA keeps the long names: Plot_Group's factor levels (01_load_data.R),
 ## every `filter(Plot_Group %in% FOCUS_GROUPS)`, and the NAMES on custom_colors /
@@ -160,7 +160,7 @@ custom_shapes <- setNames(rep(16, length(FOCUS_GROUPS)), FOCUS_GROUPS)
 ## (facet strips, legend keys, captions) and nowhere else -- which is why
 ## Table 1 (02) and the mediation/regression/t-test scripts (04-08) keep printing
 ## the full names and cannot break.
-GROUP_LABELS <- setNames(c("CBP+H", "CBP+T")[seq_along(FOCUS_GROUPS)], FOCUS_GROUPS)
+GROUP_LABELS <- setNames(c("CBP+Hydrocodone", "CBP+Tramadol")[seq_along(FOCUS_GROUPS)], FOCUS_GROUPS)
 
 ## Vectorized: long group name (or factor) -> short label, anything unrecognised
 ## passes through unchanged.
