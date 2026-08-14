@@ -1,46 +1,45 @@
 ################################################################################
 ## 18. MULTIPLE REGRESSION: NRS ~ log ROE + 5-HT4 / 5-HT6
-##     Six pre-specified models, fit independently in each drug group.
+##     Five pre-specified models, fit independently in each drug group.
 ##     Section 18l repeats the regression table with SOWS as the outcome.
 ##
 ## MODELS (each fit separately within Hydrocodone group and Tramadol group).
-## Model KEYS are on the left; every model contains log_ROE.
-##   HT4                NRS = b0 + b_ROE*log_ROE + b_HT4*R_5HT4                + e
-##   HT6                NRS = b0 + b_ROE*log_ROE                + b_HT6*R_5HT6 + e
-##   HT4_HT6            NRS = b0 + b_ROE*log_ROE + b_HT4*R_5HT4 + b_HT6*R_5HT6 + e
-##   HT4_HT6_Int        HT4_HT6 + b_I*(R_5HT4 * R_5HT6)                        + e
-##   HT4_HT6_Cov        HT4_HT6 + Sex + MQS non-opioid + log10 MME + SOWS + DOU
-##   HT4_HT6_Cov_noMME  HT4_HT6 + Sex + MQS non-opioid +             SOWS + DOU
+## Model KEYS are on the left, the M-numbers they are referred to by in the
+## figures in the middle; every model contains log_ROE.
+##   HT4                M1  y = b0 + b_ROE*log_ROE + b_HT4*R_5HT4                + e
+##   HT6                M2  y = b0 + b_ROE*log_ROE                + b_HT6*R_5HT6 + e
+##   HT4_HT6            M3  y = b0 + b_ROE*log_ROE + b_HT4*R_5HT4 + b_HT6*R_5HT6 + e
+##   HT4_HT6_ROEint     M4  M3 + b_4I*(log_ROE * R_5HT4) + b_6I*(log_ROE * R_5HT6)
+##   HT4_HT6_ROEint_Cov M5  M4 + Sex + log10 MME + MQS non-opioid
 ##
-## WHY THE INTERACTION MODEL EXISTS
-##   HT4_HT6 asks whether 5-HT4 and 5-HT6 carry SEPARATE information about
-##   pain. It does not ask whether their effects depend on EACH OTHER --
-##   whether 5-HT4's association with pain is stronger or weaker at different
-##   levels of 5-HT6. That second question is a statistical interaction
-##   (moderation) term: literally the product of the two receptor values,
-##   added to HT4_HT6 as a fourth predictor. Note that in that model b_HT4 and
-##   b_HT6 become "this receptor's effect when the OTHER receptor = 0" -- a
-##   value that never occurs in this data -- so read the interaction
-##   coefficient and the nested F test, not the two main effects.
+## WHY THE INTERACTION MODEL (M4) EXISTS
+##   M3 asks whether 5-HT4 and 5-HT6 carry SEPARATE information about the
+##   outcome once exposure is netted out. It does not ask whether either
+##   receptor's association DEPENDS ON EXPOSURE -- whether 5-HT4 tracks pain
+##   more strongly in heavily exposed patients than in lightly exposed ones.
+##   That second question is a statistical interaction (moderation) term:
+##   literally the product of log ROE and the receptor value, one per receptor,
+##   added to M3. Note that in M4 b_ROE, b_HT4 and b_HT6 become "this
+##   predictor's effect when the variable it is multiplied by = 0" -- for
+##   log_ROE that means ROE = 1, and for the receptors a value that never
+##   occurs in this data -- so read the interaction coefficients and the nested
+##   F test, not the three main effects.
 ##
-## WHY THERE ARE TWO ADJUSTED MODELS
-##   HT4_HT6_Cov asks whether the receptor-pain associations survive
-##   adjustment for the obvious confounders: sex, non-opioid medication load
-##   (MQS non-opioid), opioid dose (log10 MME), withdrawal symptoms (SOWS) and
-##   how long the patient has been on opioids (DOU). Of those five, four are
-##   fully observed in both drug groups -- but MME is missing for 5 subjects
-##   (1 hydrocodone, 4 tramadol), and complete-case fitting would silently
-##   drop them. HT4_HT6_Cov_noMME is the same model without MME, fit on the
-##   same rows as every other model here, so the cost of including MME is
-##   VISIBLE (compare the two n's) instead of hidden. Because the two are fit
-##   on different rows, their R2 and AIC are NOT comparable to each other --
-##   see 18k.
+## WHY THERE IS AN ADJUSTED MODEL (M5)
+##   M5 asks whether whatever M4 finds survives adjustment for the obvious
+##   confounders: sex, opioid dose (log10 MME) and non-opioid medication load
+##   (MQS non-opioid). Sex and MQS non-opioid are fully observed in both drug
+##   groups; MME is missing for 5 subjects (1 hydrocodone, 4 tramadol), so M5
+##   is fit on FEWER ROWS than M1-M4 and its R2 / adj R2 / AIC / RMSE are not
+##   comparable to theirs. Compare the n row before comparing anything else.
+##   For the same reason there is no valid nested F test from M4 to M5 -- see
+##   MREG_NESTED at 18a.
 ##
-##   Read both adjusted models as exploratory. HT4_HT6_Cov is 9 parameters on
-##   n ~ 18 (hydrocodone) and n ~ 13 (tramadol), and the tramadol group is
-##   20/23 female, so its sex coefficient in particular is barely identified.
-##   Directions and the model-level fit are worth reading; individual
-##   covariate CIs are too wide to be more than a lead.
+##   Read M5 as exploratory. It is 9 parameters on n ~ 18 (hydrocodone) and
+##   n ~ 13 (tramadol), and the tramadol group is 20/23 female, so its sex
+##   coefficient in particular is barely identified. Directions and the
+##   model-level fit are worth reading; individual covariate CIs are too wide
+##   to be more than a lead.
 ##
 ## HOW THIS DIFFERS FROM SECTION 16
 ##   Section 16 runs the SAME two-predictor model once per receptor across the
@@ -55,7 +54,7 @@
 ##   HT4 and HT6 are numerically identical to section 16's R_5HT4 and R_5HT6
 ##   rows (same formula, same data); that is a deliberate cross-check.
 ##
-## WHY HT4_HT6 IS THE INTERESTING ONE
+## WHY M3 IS THE INTERESTING ONE
 ##   HT4 and HT6 each ask "does this receptor track pain once exposure is
 ##   netted out". HT4_HT6 asks the harder question: do 5-HT4 and 5-HT6 carry
 ##   SEPARATE information about pain, or is one of them just standing in for
@@ -83,10 +82,12 @@
 ##         either, since ROE differs ~40x in scale between them. The
 ##         interaction test in 18e is still a valid test of raw-unit slope
 ##         equality; just do not read the two raw numbers as effect sizes.
-##   Covariate scales in the two adjusted models: MME enters as log10 (it is
-##   heavily right-skewed and no subject has MME == 0, so nothing is lost),
-##   DOU enters RAW in years (so its coefficient reads as NRS points per extra
-##   year on opioids), and sex enters as a 0/1 indicator, sex_female.
+##   Covariate scales in M5: MME enters as log10 (it is heavily right-skewed
+##   and no subject has MME == 0, so nothing is lost), MQS non-opioid enters
+##   raw, and sex enters as a 0/1 indicator, sex_female. The two interaction
+##   terms in M4/M5 are the products of log10 ROE with the RAW receptor value,
+##   so their coefficients read as "change in the receptor's slope per one-unit
+##   increase in log10 ROE".
 ##
 ## THE -Inf TRAP
 ##   log_ROE = log10(ROE) is -Inf for the 4 subjects per group with ROE == 0,
@@ -119,8 +120,15 @@ MREG_MIN_N  <- 12             # skip a group x model cell smaller than this
 ## Derived predictors, computed once here on `master` so that 18c's per-group
 ## fits, 18e's pooled fit and 18l's SOWS models all see the identical columns.
 ##
-## (a) The interaction term: the product of 5-HT4 and 5-HT6 activity.
-master$R_5HT4_x_5HT6 <- master$R_5HT4 * master$R_5HT6
+## (a) The two interaction terms: exposure x receptor, one per receptor. Built
+## on log_ROE (not raw ROE), because log_ROE is what enters the models as a
+## main effect and an interaction has to be the product of the terms actually
+## in the model. log_ROE is -Inf for the ROE == 0 subjects, so these products
+## are non-finite for exactly those rows -- the is.finite() filter in
+## mreg_fit_one() drops them, which is the same set of rows log_ROE itself
+## would have cost.
+master$R_5HT4_x_ROE <- master$R_5HT4 * master$log_ROE
+master$R_5HT6_x_ROE <- master$R_5HT6 * master$log_ROE
 
 ## (b) Sex as a numeric 0/1 indicator. `master$female` (01_load_data.R:100) is
 ## LOGICAL, and handing lm() a logical makes it name the coefficient
@@ -131,49 +139,57 @@ master$R_5HT4_x_5HT6 <- master$R_5HT4 * master$R_5HT6
 ## column keeps coefficient name == column name. 1 = female, 0 = male.
 master$sex_female <- as.numeric(master$female)
 
-## The six models. Each entry is the full predictor vector, in the order the
-## terms should appear. Change this list (and MREG_Y) and re-source from 18a to
-## re-run the whole section on different predictors -- nothing downstream is
-## hard-coded to 5-HT4 / 5-HT6 or to six models.
+## The five models, M1 - M5 in the order they appear everywhere downstream.
+## Each entry is the full predictor vector, in the order the terms should
+## appear. Change this list (and MREG_Y) and re-source from 18a to re-run the
+## whole section on different predictors -- nothing downstream is hard-coded to
+## 5-HT4 / 5-HT6 or to five models.
 ##
-## MME enters as log10, DOU raw -- see the SCALING note in the header. The two
-## adjusted models differ ONLY in whether log_MME is present: MME is the one
-## new predictor with missing values (5 subjects), so the pair makes the cost
-## of adjusting for dose visible in the n column rather than hiding it.
+## M4 adds BOTH exposure x receptor products at once rather than one at a time:
+## they are asked as one question ("does exposure moderate the receptor-outcome
+## association at all?"), and the nested F test in 18d tests them jointly on 2
+## df, which is the right test for that question.
+##
+## M5 = M4 + sex + log10 MME + MQS non-opioid. MME is the only predictor in
+## this section with missing values (5 subjects), so M5 is fit on fewer rows
+## than M1-M4 -- see the header, 18d's guard, and the n row of every table.
 MREG_MODELS <- list(
-  HT4               = c("log_ROE", "R_5HT4"),
-  HT6               = c("log_ROE", "R_5HT6"),
-  HT4_HT6           = c("log_ROE", "R_5HT4", "R_5HT6"),
-  HT4_HT6_Int       = c("log_ROE", "R_5HT4", "R_5HT6", "R_5HT4_x_5HT6"),
-  HT4_HT6_Cov       = c("log_ROE", "R_5HT4", "R_5HT6", "sex_female",
-                        "MQS_nonopioid", "log_MME", "SOWS", "DOU"),
-  HT4_HT6_Cov_noMME = c("log_ROE", "R_5HT4", "R_5HT6", "sex_female",
-                        "MQS_nonopioid", "SOWS", "DOU")
+  HT4                = c("log_ROE", "R_5HT4"),
+  HT6                = c("log_ROE", "R_5HT6"),
+  HT4_HT6            = c("log_ROE", "R_5HT4", "R_5HT6"),
+  HT4_HT6_ROEint     = c("log_ROE", "R_5HT4", "R_5HT6",
+                         "R_5HT4_x_ROE", "R_5HT6_x_ROE"),
+  HT4_HT6_ROEint_Cov = c("log_ROE", "R_5HT4", "R_5HT6",
+                         "R_5HT4_x_ROE", "R_5HT6_x_ROE",
+                         "sex_female", "log_MME", "MQS_nonopioid")
 )
 
 ## Full model labels -- each one names its own predictors, so a reader looking
-## at a facet strip or a table header never has to come back up here to find
-## out what the model contains.
+## at a facet strip or a title never has to come back up here to find out what
+## the model contains. No M-number here: these are used one at a time in
+## titles and subtitles, where the formula is the whole point. The M-numbers
+## live in MREG_MODEL_SHORT below, which is what labels the columns and bars
+## where several models sit side by side.
 MREG_MODEL_LABELS <- c(
-  HT4               = "ROE + 5-HT4",
-  HT6               = "ROE + 5-HT6",
-  HT4_HT6           = "ROE + 5-HT4 + 5-HT6",
-  HT4_HT6_Int       = "ROE + 5-HT4 + 5-HT6 + 5-HT4x5-HT6",
-  HT4_HT6_Cov       = "ROE + 5-HT4 + 5-HT6 + Sex + MQS non-opioid + log MME + SOWS + DOU",
-  HT4_HT6_Cov_noMME = "ROE + 5-HT4 + 5-HT6 + Sex + MQS non-opioid + SOWS + DOU"
+  HT4                = "ROE + 5-HT4",
+  HT6                = "ROE + 5-HT6",
+  HT4_HT6            = "ROE + 5-HT4 + 5-HT6",
+  HT4_HT6_ROEint     = "ROE + 5-HT4 + 5-HT6 + ROEx5-HT4 + ROEx5-HT6",
+  HT4_HT6_ROEint_Cov = paste("ROE + 5-HT4 + 5-HT6 + ROEx5-HT4 + ROEx5-HT6",
+                             "+ Sex + log MME + MQS non-opioid")
 )
 
 ## Nested comparisons to run in 18d: c(reduced, full).
 ##
-## HT4_HT6 -> HT4_HT6_Cov is deliberately ABSENT. log_MME has missing values,
-## so the adjusted-with-MME model is fit on fewer rows than HT4_HT6, and a
-## nested F test across different row sets is not valid -- 18d's own guard
-## would refuse it anyway. HT4_HT6 -> HT4_HT6_Cov_noMME IS valid: sex,
-## MQS non-opioid, SOWS and DOU are fully observed in both drug groups, so
-## that model lands on exactly the same rows as HT4_HT6.
+## M4 -> M5 is deliberately ABSENT. log_MME has missing values, so M5 is fit on
+## fewer rows than M4, and a nested F test across different row sets is not
+## valid -- 18d's own guard would refuse it anyway. There is no no-MME twin of
+## M5 to compare instead: the model set was specified with MME in it, and
+## adding an unrequested sixth model to make one comparison work would put a
+## column in the figures that nobody asked for. The cost of MME is visible in
+## the n row of every table instead.
 MREG_NESTED <- list(c("HT4", "HT4_HT6"), c("HT6", "HT4_HT6"),
-                    c("HT4_HT6", "HT4_HT6_Int"),
-                    c("HT4_HT6", "HT4_HT6_Cov_noMME"))
+                    c("HT4_HT6", "HT4_HT6_ROEint"))
 
 MREG_DIR <- file.path(OUT_DIR, "multiple_regression_HT4_HT6")
 dir.create(MREG_DIR, showWarnings = FALSE, recursive = TRUE)
@@ -190,14 +206,14 @@ MREG_COLS <- if (exists("custom_colors")) custom_colors else
 ## MED_LABELS because this file advertises itself as self-contained and
 ## sections 15-17 have no use for them. Consulted before MED_LABELS below.
 MREG_EXTRA_LABELS <- c(
-  ## Overrides MED_LABELS' "5-HT4 x 5-HT6 (raw interaction)": with the
-  ## mean-centered variant gone there is nothing for "raw" to contrast with.
-  R_5HT4_x_5HT6 = "5-HT4 x 5-HT6",
+  R_5HT4_x_ROE  = "5-HT4 x log10 ROE",
+  R_5HT6_x_ROE  = "5-HT6 x log10 ROE",
   sex_female    = "Sex (female = 1)",
   MQS_nonopioid = "MQS non-opioid",
   log_MME       = "log10 MME",
-  SOWS          = "SOWS withdrawal",
-  DOU           = "Duration of opioid use (yr)"
+  ## Not a predictor in any model here any more -- kept because 18l uses SOWS
+  ## as the OUTCOME, and mreg_lab() is what titles that run's figures.
+  SOWS          = "SOWS withdrawal"
 )
 
 ## Variable label lookup. Robust to keys that are in neither table (unlike
@@ -230,44 +246,57 @@ mreg_stars <- function(p) {
 ## Short axis-friendly labels used on the coefficient forests.
 mreg_short <- function(v) {
   out <- sub("^R_", "", v)
-  out[out == "5HT4_x_5HT6"]   <- "5-HT4 x 5-HT6"
+  out[out == "5HT4_x_ROE"]    <- "5-HT4 x log10 ROE"
+  out[out == "5HT6_x_ROE"]    <- "5-HT6 x log10 ROE"
   out[out == "log_ROE"]       <- "log10 ROE"
   out[out == "log_MME"]       <- "log10 MME"
   out[out == "sex_female"]    <- "Sex (female)"
   out[out == "MQS_nonopioid"] <- "MQS non-opioid"
-  out[out == "DOU"]           <- "DOU (yr)"
+  out[out == "DOU"]           <- "DOU (yr)"   # no longer a predictor; harmless
   out
 }
 
-## Short MODEL labels, for the two spots with only enough room for one model
-## per column/bar rather than one per row (the regression-table header (4) and
-## the model-comparison x-axis (6)). MREG_MODEL_LABELS's full formula reads
-## fine one at a time in a title/subtitle, but six of them side by side overlap
-## into unreadable text. These are keyed the same way as MREG_MODEL_LABELS and
-## pre-wrapped by hand -- every model here contains ROE, so the short forms
-## only need to say what is added beyond it. The full predictor list is still
-## visible in the table's own row labels and in every facet strip.
+## Short MODEL labels, for the spots with only enough room for one model per
+## column/bar rather than one per row (the regression-table header (4), the
+## observed-vs-predicted facet strips (5) and the model-comparison x-axis (6)).
+## MREG_MODEL_LABELS's full formula reads fine one at a time in a
+## title/subtitle, but five of them side by side overlap into unreadable text.
+##
+## Each one leads with its M-number, because that is how the models are
+## referred to when they are discussed as a set, and then says what the model
+## adds -- every model here contains ROE, so M4/M5 only need to name the new
+## terms. The full predictor list is still visible in the table's own row
+## labels and in every facet strip. Keyed the same way as MREG_MODEL_LABELS and
+## pre-wrapped by hand.
 MREG_MODEL_SHORT <- c(
-  HT4               = "ROE +\n5-HT4",
-  HT6               = "ROE +\n5-HT6",
-  HT4_HT6           = "ROE + 5-HT4\n+ 5-HT6",
-  HT4_HT6_Int       = "+ 5-HT4 x\n5-HT6",
-  HT4_HT6_Cov       = "+ Sex, MQS,\nlog MME,\nSOWS, DOU",
-  HT4_HT6_Cov_noMME = "+ Sex, MQS,\nSOWS, DOU"
+  HT4                = "M1\nROE +\n5-HT4",
+  HT6                = "M2\nROE +\n5-HT6",
+  HT4_HT6            = "M3\nROE + 5-HT4\n+ 5-HT6",
+  HT4_HT6_ROEint     = "M4\n+ ROE x 5-HT4\n+ ROE x 5-HT6",
+  HT4_HT6_ROEint_Cov = "M5\n+ Sex, log MME,\nMQS non-opioid"
 )
 
-## 18l drops SOWS from the two adjusted models, so it needs short labels that
-## do not advertise a predictor those models no longer contain. Spelled out
-## rather than regex-stripped from the strings above -- they are hand-wrapped,
-## and deleting "SOWS, " from a wrapped string leaves the line breaks wrong.
+## 18l used to need its own short labels, because the adjusted models then
+## contained SOWS and SOWS is that run's OUTCOME. No model contains SOWS any
+## more, so the two label sets are identical -- the alias is kept because
+## 02_table1.R passes MREG_MODEL_SHORT_SOWS by name when it builds Table 3, and
+## because a future model set could reintroduce the clash.
 MREG_MODEL_SHORT_SOWS <- MREG_MODEL_SHORT
-MREG_MODEL_SHORT_SOWS["HT4_HT6_Cov"]       <- "+ Sex, MQS,\nlog MME, DOU"
-MREG_MODEL_SHORT_SOWS["HT4_HT6_Cov_noMME"] <- "+ Sex, MQS,\nDOU"
 
 ## Look a short label up BY MODEL KEY, falling back to the key itself so a
 ## model added to MREG_MODELS without a short-label entry still draws.
 mreg_model_short <- function(keys, tbl = MREG_MODEL_SHORT) {
   out <- unname(tbl[keys])
+  ifelse(is.na(out), keys, out)
+}
+
+## Just the M-number ("M3"), for the spots that refer to a model in running
+## text rather than labelling a column -- the nested-test lines under the
+## model-comparison figure. Read off the FIRST LINE of the short label so the
+## numbering has exactly one source: renumber MREG_MODEL_SHORT and every
+## mention follows. Falls back to the key for a model with no short label.
+mreg_model_num <- function(keys, tbl = MREG_MODEL_SHORT) {
+  out <- sub("\n.*$", "", unname(tbl[keys]))
   ifelse(is.na(out), keys, out)
 }
 
@@ -508,14 +537,18 @@ for (g in names(mreg_fits)) {
     added <- setdiff(ful$preds, red$preds)
 
     ## Keyed on group + BOTH model names, not just the reduced one: MREG_NESTED
-    ## has two pairs that share the same reduced model (HT4_HT6 -> HT4_HT6_Int
-    ## and HT4_HT6 -> HT4_HT6_Cov_noMME), and a key of just paste(g, pair[1]) would
-    ## make the second overwrite the first in this list.
+    ## has two pairs that share the same FULL model (HT4 -> HT4_HT6 and
+    ## HT6 -> HT4_HT6), and has held pairs sharing a reduced model too, so a key
+    ## of just one half of the pair would make one overwrite the other here.
     mreg_nested_rows[[paste(g, pair[1], pair[2])]] <- tibble::tibble(
       group        = g,
       reduced      = pair[1],
       full         = pair[2],
       added_term   = paste(added, collapse = " + "),
+      ## Pretty version of the same thing, for figure (6)'s subtitle. Has to be
+      ## built by mapping mreg_short() over the terms BEFORE they are pasted:
+      ## run on the joined string it would only rewrite the first one.
+      added_lab    = paste(mreg_short(added), collapse = " + "),
       n            = nrow(ful$data),
       df_num       = av$Df[2],
       df_den       = av$Res.Df[2],
@@ -854,8 +887,6 @@ mreg_table_figure <- function(g, models, coef_tbl, fit_tbl, yv,
                txt = as.character(all_rows[[i]]),
                is_stat = i > n_body, stringsAsFactors = FALSE)
   }))
-  ## y descends down the page; header sits above row 1.
-  cellsdf$y <- -cellsdf$row
   cellsdf$x <- cellsdf$col
 
   ## Header cells are the SHORT model labels, looked up by model key.
@@ -863,9 +894,32 @@ mreg_table_figure <- function(g, models, coef_tbl, fit_tbl, yv,
                     txt = c("", mreg_model_short(mods, shorts)),
                     stringsAsFactors = FALSE)
 
+  ## HEADER GEOMETRY. The header text is CENTERED on y = 0 and is as many lines
+  ## tall as the longest short label -- three, now that those labels lead with
+  ## an M-number, where they used to be two. The rules were hardcoded at +0.55
+  ## and -0.45, sized for exactly two lines, so a third line struck through the
+  ## lower rule. Everything below is derived from hdr_lines instead.
+  ##
+  ## 0.20 per line is calibrated to reproduce the old hardcoded numbers at two
+  ## lines (2 * 0.20 + 0.05 = 0.45), so a two-line header still lays out
+  ## exactly as it did before this became dynamic.
+  hdr_lines <- max(vapply(strsplit(hdr$txt, "\n", fixed = TRUE), length, integer(1)))
+  hdr_half  <- 0.20 * hdr_lines
+  rule_hdr  <- -(hdr_half + 0.05)
+
+  ## Body rows sit 1 y-unit apart and hold two lines, so row 1's text reaches
+  ## up to about -1 + 0.45. Once the header grows past two lines that collides
+  ## with rule_hdr, so shift the whole body down by however much it overlaps
+  ## (plus 0.10 of clearance). At two lines this is 0 and nothing moves.
+  body_off <- max(0, (-rule_hdr + 0.45 + 0.10) - 1)
+
+  ## y descends down the page; header sits above row 1.
+  cellsdf$y <- -(cellsdf$row + body_off)
+
   p_tab <- ggplot2::ggplot() +
-    ggplot2::geom_hline(yintercept = c(0.55, -0.45, -(n_body + 0.45),
-                                       -(length(all_rows) + 0.55)),
+    ggplot2::geom_hline(yintercept = c(hdr_half + 0.15, rule_hdr,
+                                       -(n_body + 0.45 + body_off),
+                                       -(length(all_rows) + 0.55 + body_off)),
                         colour = "grey35", linewidth = 0.4) +
     ggplot2::geom_text(data = hdr, ggplot2::aes(x, y, label = txt),
                        fontface = "bold", size = 3.5, lineheight = 0.95) +
@@ -876,7 +930,9 @@ mreg_table_figure <- function(g, models, coef_tbl, fit_tbl, yv,
                        ggplot2::aes(x, y, label = txt),
                        size = 3.4, lineheight = 0.95) +
     ggplot2::scale_x_continuous(limits = c(0.4, ncol_tot + 0.6), expand = c(0, 0)) +
-    ggplot2::scale_y_continuous(limits = c(-(length(all_rows) + 1.1), 1.6), expand = c(0, 0)) +
+    ggplot2::scale_y_continuous(limits = c(-(length(all_rows) + 1.1 + body_off),
+                                           hdr_half + 1.2),
+                                expand = c(0, 0)) +
     ggplot2::labs(
       title    = sprintf("%s regressed on log10 ROE and receptor activity -- %s",
                          mreg_lab(yv), g),
@@ -898,10 +954,13 @@ mreg_table_figure <- function(g, models, coef_tbl, fit_tbl, yv,
       plot.background = ggplot2::element_rect(fill = "white", colour = NA)
     )
 
-  ## 2.3 rather than the original 2.6 per column: with six models the table is
-  ## 7 columns wide, and the old factor pushed it past 19 inches.
+  ## 2.3 rather than the original 2.6 per column: with five models the table is
+  ## 6 columns wide, and the old factor made it needlessly wide. Height carries
+  ## the extra header lines too, so the taller header does not eat into the
+  ## body's share of a fixed-height device.
   mreg_save(p_tab, file, dir = dir,
-            w = 2.3 * ncol_tot + 1.4, h = 0.38 * length(all_rows) + 2.4)
+            w = 2.3 * ncol_tot + 1.4,
+            h = 0.38 * length(all_rows) + 2.4 + 0.38 * max(0, hdr_lines - 2))
   invisible(p_tab)
 }
 
@@ -974,11 +1033,11 @@ if (nrow(op_df)) {
 ## two-receptor model does not beat the single-receptor ones on these it is not
 ## earning its keep.
 ##
-## CAUTION with six models: HT4_HT6_Cov is fit on FEWER rows than every other
-## bar here (log_MME is missing for 5 subjects), and R2/AIC computed on
-## different row sets are not comparable. Its bar is legitimate as a
-## description of that model; it is not a like-for-like contest against the
-## others. HT4_HT6_Cov_noMME is the bar to compare against HT4_HT6.
+## CAUTION: M5 (HT4_HT6_ROEint_Cov) is fit on FEWER rows than every other bar
+## here (log_MME is missing for 5 subjects), and R2/AIC computed on different
+## row sets are not comparable. Its bar is legitimate as a description of that
+## model; it is not a like-for-like contest against M1-M4, which are all fit on
+## the same rows and can be read against each other freely.
 if (nrow(mreg_fit_tbl)) {
   comp <- mreg_fit_tbl %>%
     dplyr::select(group, model, n, R2, adj_R2, AIC) %>%
@@ -998,9 +1057,11 @@ if (nrow(mreg_fit_tbl)) {
   ## single line runs off the right edge of the device and gets clipped.
   sub_txt <- NULL
   if (nrow(mreg_nested_tbl)) {
-    per_row <- sprintf("%s:  +%s over %s: F(%d,%d) = %.2f, p = %s",
-                       mreg_nested_tbl$group, mreg_short(mreg_nested_tbl$added_term),
-                       mreg_nested_tbl$reduced, mreg_nested_tbl$df_num,
+    per_row <- sprintf("%s:  %s -> %s, adding %s:  F(%d,%d) = %.2f, p = %s",
+                       mreg_nested_tbl$group,
+                       mreg_model_num(mreg_nested_tbl$reduced),
+                       mreg_model_num(mreg_nested_tbl$full),
+                       mreg_nested_tbl$added_lab, mreg_nested_tbl$df_num,
                        mreg_nested_tbl$df_den, mreg_nested_tbl$F_stat,
                        mreg_fmt_p(mreg_nested_tbl$p))
     sub_txt <- paste0("Nested F tests (does the added term improve the fit?)\n",
@@ -1031,8 +1092,8 @@ if (nrow(mreg_fit_tbl)) {
                    axis.text.x = ggplot2::element_text(size = 9))
 
   ## Width scales with the number of models (each gets its own bar per group
-  ## per metric panel); 2.6 per model rather than 3.5, since six models at the
-  ## old factor made a 24-inch-wide figure. Height scales with how many
+  ## per metric panel); 2.6 per model rather than 3.5, since five models at the
+  ## old factor made a 20-inch-wide figure. Height scales with how many
   ## nested-test lines are in the subtitle.
   mreg_save(p_comp, "MREG_model_comparison.png",
             w = 2.6 * length(MREG_MODELS) + 3,
@@ -1048,16 +1109,15 @@ if (nrow(mreg_fit_tbl)) {
 ## (8). Deliberately hardcoded rather than "last model in the list", for two
 ## separate reasons:
 ##
-##   - HT4_HT6_Int contains a product term. Both plots hold every OTHER
+##   - M4 and M5 both contain product terms. Both plots hold every OTHER
 ##     predictor at its mean while sweeping one receptor across the x-axis,
 ##     which is wrong when "other predictors" includes a product built from
 ##     the very receptor being swept -- the product would stay frozen at its
 ##     mean instead of moving with the receptor, so the drawn line would not
 ##     match what the model actually predicts.
-##   - The two adjusted models would freeze six or seven covariates at their
-##     means to draw one receptor's line. That line is not wrong, but it is a
-##     picture of an 8-predictor model at n ~ 13-19 and reads as far more
-##     precise than it is.
+##   - M5 would additionally freeze three covariates at their means to draw one
+##     receptor's line. That line is not wrong, but it is a picture of an
+##     8-predictor model at n ~ 13-18 and reads as far more precise than it is.
 ##
 ## The other models still get their own coefficient forest, regression table,
 ## nested test and model-comparison entries; they just aren't the model behind
@@ -1282,12 +1342,13 @@ mreg_config <- tibble::tibble(
     paste(sprintf("%s: %s ~ %s", names(MREG_MODELS), MREG_Y,
                   vapply(MREG_MODELS, paste, character(1), collapse = " + ")),
           collapse = "  |  "),
-    "R_5HT4_x_5HT6 = R_5HT4 * R_5HT6  (HT4_HT6_Int)",
+    paste0("R_5HT4_x_ROE = R_5HT4 * log_ROE and R_5HT6_x_ROE = R_5HT6 * log_ROE ",
+           "(M4, M5)"),
     "sex_female = 1 if female (sex == 2), 0 if male; from master$female",
-    paste0("MME entered as log10 (log_MME); DOU entered RAW in years; ",
-           "MQS_nonopioid and SOWS entered raw. HT4_HT6_Cov is fit on fewer rows ",
-           "than every other model because log_MME has missing values -- its R2/AIC ",
-           "are NOT comparable to the others; use HT4_HT6_Cov_noMME for that."),
+    paste0("MME entered as log10 (log_MME); MQS_nonopioid entered raw. M5 ",
+           "(HT4_HT6_ROEint_Cov) is fit on fewer rows than M1-M4 because log_MME ",
+           "has missing values -- its R2/adj R2/AIC/RMSE are NOT comparable to ",
+           "theirs, and no nested F test into it is valid. Compare the n row first."),
     as.character(MREG_MIN_N),
     "raw units primary; standardized betas (z within group) in the Coefficients sheet",
     "complete cases AND all values finite (drops ROE == 0, whose log10 is -Inf)",
@@ -1323,8 +1384,11 @@ message("\nSection 18 results and figures written to: ",
 ## is what was asked for, and the caveats that make those figures worth having
 ## for NRS apply here unchanged.
 ##
-## SOWS cannot be a predictor of itself, so it is stripped out of the two
-## adjusted models. setdiff() leaves the four receptor-only models untouched.
+## SOWS cannot be a predictor of itself, so it is stripped out of every model.
+## As of the current M1-M5 set no model contains SOWS, so both the setdiff()
+## and the label surgery below are no-ops -- they are kept as guards, so that
+## putting SOWS back into a model at 18a cannot silently produce a SOWS ~ SOWS
+## regression here.
 
 MREG_Y_SOWS      <- "SOWS"
 MREG_MODELS_SOWS <- lapply(MREG_MODELS, setdiff, MREG_Y_SOWS)
@@ -1390,23 +1454,28 @@ message("Section 18l (SOWS) tables written to: ",
 ##   whose AV panel is a shapeless cloud with one far-out point is a coefficient
 ##   driven by that point, and the Cook's distance panel in the diagnostics
 ##   figure will name the subject.
-## - n = 19 / 17 with 3-4 parameters in HT4_HT6. These are pre-specified
-##   receptors, so no multiplicity correction is applied -- but the CIs are wide
-##   and any result here needs replication before it is more than a lead.
+## - n = 19 / 17 with 3-4 parameters in M3. These are pre-specified receptors,
+##   so no multiplicity correction is applied -- but the CIs are wide and any
+##   result here needs replication before it is more than a lead.
 ##   Section 16's 19-receptor screen is where FDR belongs; this is not that.
-## - The two ADJUSTED models are exploratory, full stop. HT4_HT6_Cov is 9
-##   parameters on n ~ 18 (hydrocodone) and n ~ 13 (tramadol), leaving 9 and 4
-##   residual df. Read the direction and the model-level fit; do not read an
-##   individual covariate's CI as an estimate of anything. Sex in particular is
-##   near-unidentified in the tramadol group, which is 20/23 female.
-## - HT4_HT6_Cov and HT4_HT6_Cov_noMME are fit on DIFFERENT ROWS, because
-##   log_MME is missing for 5 subjects (1 hydrocodone, 4 tramadol) and every
-##   other predictor in this section is fully observed. Their R2, adj R2, AIC
-##   and RMSE are therefore not comparable to each other or to the receptor-only
-##   models -- that is exactly why the no-MME twin exists, so the comparison
-##   against HT4_HT6 can be made on a common row set. The nested F test that IS
-##   valid (HT4_HT6 -> HT4_HT6_Cov_noMME) is in the Nested_tests sheet; 18d's
-##   guard would refuse the MME one, which is why it is not in MREG_NESTED.
+## - M4 spends 2 df on the two exposure x receptor products at n = 17-19. Read
+##   the joint nested F test (M3 -> M4) before either interaction coefficient:
+##   with this much data one product term can look large on its own noise.
+##   Remember also that adding them changes what b_HT4 and b_HT6 MEAN -- they
+##   are now the receptor slopes at log10 ROE = 0, i.e. at ROE = 1 -- so a main
+##   effect that moves between M3 and M4 has not necessarily changed, it is
+##   being reported at a different point.
+## - M5 is exploratory, full stop. It is 9 parameters on n ~ 18 (hydrocodone)
+##   and n ~ 13 (tramadol), leaving 9 and 4 residual df. Read the direction and
+##   the model-level fit; do not read an individual covariate's CI as an
+##   estimate of anything. Sex in particular is near-unidentified in the
+##   tramadol group, which is 20/23 female.
+## - M5 is fit on DIFFERENT ROWS from M1-M4, because log_MME is missing for 5
+##   subjects (1 hydrocodone, 4 tramadol) and every other predictor in this
+##   section is fully observed. Its R2, adj R2, AIC and RMSE are therefore not
+##   comparable to theirs, and no nested F test into it is valid -- which is
+##   why M4 -> M5 is not in MREG_NESTED (18d's guard would refuse it anyway).
+##   The n row of every table is where that cost is visible.
 ## - Cross-check: HT4's R_5HT4 coefficient and HT6's R_5HT6 coefficient are the
 ##   same quantity as section 16's raw b_Receptor_raw for those receptors, and
 ##   the same as section 15's b path. Any disagreement means one of the three
@@ -1422,7 +1491,15 @@ message("Section 18l (SOWS) tables written to: ",
 ## - To re-run on a different outcome or different receptors, edit MREG_Y and
 ##   MREG_MODELS at 18a (and MREG_MODEL_LABELS, MREG_MODEL_SHORT and MREG_NESTED
 ##   to match) and re-source from 18a. Nothing downstream is hard-coded to two
-##   receptors or six models -- except MREG_FULL just above 18g, which is
+##   receptors or five models -- except MREG_FULL just above 18g, which is
 ##   deliberately pinned to "HT4_HT6" rather than auto-following the list (see
-##   its comment).
+##   its comment), and REGTAB_MODELS in 02_table1.R, which names the three
+##   models (M3, M4, M5) that Tables 2 and 3 publish. If you rename a model key
+##   here, rename it there too.
+## - Any interaction term you add at 18a has to exist as a COLUMN on `master`
+##   (built at 18a, above MREG_MODELS), not as an I(a*b) or a:b in the formula.
+##   The VIF loop, the added-variable plots, the partial-residual contributions
+##   and the table's row ordering all match coefficient names against predictor
+##   names, and R's formula notation produces coefficient names those lookups
+##   would miss.
 ################################################################################
