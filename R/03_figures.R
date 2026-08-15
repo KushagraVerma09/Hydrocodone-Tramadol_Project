@@ -453,7 +453,12 @@ theme_fig <- function(faceted = TRUE, legend = "none") {
       legend.box.spacing = unit(0.3, "lines"),
       legend.margin      = margin(0, 0, 0, 0),
       plot.margin        = margin(4, 8, 2, 4),
-      panel.spacing      = unit(1.1, "lines")
+      ## Wide enough that the LAST x tick label of one panel and the FIRST of the
+      ## next do not touch. At 1.1 lines they collided ("0.50" running straight
+      ## into "-0.75") once the tick labels were scaled up -- the gap has to grow
+      ## with the type, and this is the axis furniture most likely to be read
+      ## wrong when it doesn't.
+      panel.spacing      = unit(2.2, "lines")
     )
   if (faceted)
     th <- th + theme(
@@ -545,6 +550,28 @@ fit_caption <- function(txt, fig_w, size_pt = FIG_CAPTION_SIZE) {
   if (length(parts) < 3) return(txt)
   paste(paste(parts[1], parts[2], sep = " | "),
         paste(parts[-(1:2)], collapse = " | "), sep = "\n")
+}
+
+## Point size at which the longest overlay legend key fits the figure width.
+##
+## The overlay legend puts the whole stats line into the key label
+## ("CBP+Hydrocodone: n = 25, r = 0.25, slope = 1.69 (p = 0.232)"), which on the
+## 11 in overlay is close to the full width. ggplot CLIPS a key that overruns --
+## it does not wrap or shrink it -- so the trailing "(p = ...)" silently
+## disappears off the right edge, which is the one part of the label a reader is
+## most likely to be looking for. Left-justifying (below) buys some room but not
+## enough once the type is scaled up, so measure the label and step the size down
+## only when it genuinely does not fit.
+##
+## The 1.0 in budget covers plot.margin left+right plus the key glyph and its
+## padding; the 9 pt floor stops a pathological label from shrinking the legend
+## into illegibility -- at that point the label itself is the thing to shorten.
+fit_legend_size <- function(txt, fig_w, size_pt = FIG_STRIP_STATS) {
+  if (!length(txt)) return(size_pt)
+  widest <- max(vapply(txt, text_width_in, numeric(1), size_pt))
+  budget <- fig_w - 1.0
+  if (widest <= budget) return(size_pt)
+  max(size_pt * budget / widest, 9)
 }
 
 ## Welch two-sample t-test on the X-axis values of the two groups.
@@ -786,8 +813,13 @@ make_overlay <- function(data, yvar, ylab, tag, file_stub = NULL,
       guides(color = guide_legend(ncol = 1)) +
       ## One key per row, left-aligned and plain: a centred key this long
       ## overruns the device and ggplot clips it rather than wrapping.
+      ## legend.location = "plot" justifies against the whole figure rather than
+      ## against the panel, so the keys start at the far left and get the full
+      ## width to run into -- without it the block stays centred and loses about
+      ## 2 in of usable width to the leading offset before anything is measured.
       theme(legend.justification = "left",
-            legend.text          = element_text(size = FIG_STRIP_STATS,
+            legend.location      = "plot",
+            legend.text          = element_text(size = fit_legend_size(key_labs, OVL_W),
                                                face = "plain"),
             legend.margin        = margin(0, 0, 0, 0),
             legend.box.margin    = margin(0, 0, 0, 0),
@@ -1283,7 +1315,8 @@ for (pr in PREDICTORS) {
           guides(color = guide_legend(ncol = 1)) +
           ## See make_overlay: a centred key this long gets clipped, not wrapped.
           theme(legend.justification = "left",
-                legend.text          = element_text(size = FIG_STRIP_STATS,
+                legend.location      = "plot",
+                legend.text          = element_text(size = fit_legend_size(key_labs, XYO_W),
                                                    face = "plain"),
                 legend.margin        = margin(0, 0, 0, 0),
                 legend.box.margin    = margin(0, 0, 0, 0),
@@ -1555,8 +1588,10 @@ for (sc in MME_ROE_SCALES) {
       p_overlay <- p_overlay +
         scale_color_manual(values = custom_colors, labels = key_labs) +
         guides(color = guide_legend(ncol = 1)) +
+        ## See make_overlay: a centred key this long gets clipped, not wrapped.
         theme(legend.justification = "left",
-              legend.text          = element_text(size = FIG_STRIP_STATS,
+              legend.location      = "plot",
+              legend.text          = element_text(size = fit_legend_size(key_labs, XYO_W),
                                                   face = "plain"),
               legend.margin        = margin(0, 0, 0, 0),
               legend.box.margin    = margin(0, 0, 0, 0),
