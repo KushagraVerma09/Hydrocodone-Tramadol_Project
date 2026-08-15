@@ -1671,3 +1671,4 @@ if (!is.null(corner_audit_tbl)) {
   write_xlsx(list(Corner_placement_audit = corner_audit_tbl),
              file.path(OUT_DIR, "Figure_StatsBox_Placement_Audit.xlsx"))
 }
+

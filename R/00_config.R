@@ -119,7 +119,7 @@ FIG_BASE_SIZE    <- 11   * TEXT_SCALE   # theme base size            (33pt)
 FIG_AXIS_TITLE   <- 9    * TEXT_SCALE   # x / y axis titles          (27pt)
 FIG_AXIS_TEXT    <- 8    * TEXT_SCALE   # tick labels                (24pt)
 FIG_STRIP_SIZE   <- 10   * TEXT_SCALE   # facet strip: group name, bold (30pt)
-FIG_STRIP_STATS  <- 9    * TEXT_SCALE   # n / r / slope line beneath it, plain
+FIG_STRIP_STATS  <- 12    * TEXT_SCALE   # n / r / slope line beneath it, plain
 ## NOT bumped, deliberately. The caption is now a single horizontal line, and at
 ## 18pt the logROE caption measures 11.7 in against an 11 in overlay figure, so it
 ## had to fold onto two lines -- which is exactly the vertical space the one-line
@@ -140,8 +140,8 @@ FIG_FONT          <- "sans"            # ONE family for theme AND annotations
 ## These two are absolute, NOT scaled by TEXT_SCALE -- ggplot linewidths are in
 ## mm, so they do not need to track the point sizes, and at 20/8 they rendered as
 ## solid black slabs thicker than the fit line they were framing.
-FIG_AXIS_LINE     <- 2.0               # bottom/left axis line width
-FIG_TICK_LINE     <- 1.6               # tick mark width
+FIG_AXIS_LINE     <- 6.0               # bottom/left axis line width
+FIG_TICK_LINE     <- 3.5               # tick mark width
 FIG_TICK_LEN      <- unit(0.22, "cm")  # POSITIVE = ticks point OUTWARD
 FIG_AXIS_TEXT_COL <- "grey15"          # tick labels: near-black, high contrast
 
