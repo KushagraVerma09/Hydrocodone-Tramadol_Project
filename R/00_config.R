@@ -35,8 +35,12 @@
 if (!exists(".HTK_PKGS_LOADED")) {
 
 ## ---- 0. PACKAGES -------------------------------------------------------------
+## ggtext supplies element_markdown(), which is what lets the facet strip carry
+## the group name and the stats line at two DIFFERENT sizes -- a plain ggplot
+## strip is one element_text and therefore one size. See strip_md() in
+## 03_figures.R.
 pkgs <- c("readxl", "writexl", "dplyr", "tidyr", "stringr",
-          "purrr", "tibble", "ggplot2", "broom", "gt")
+          "purrr", "tibble", "ggplot2", "broom", "gt", "ggtext")
 missing <- pkgs[!pkgs %in% rownames(installed.packages())]
 if (length(missing)) install.packages(missing)
 invisible(lapply(pkgs, library, character.only = TRUE))
@@ -119,7 +123,14 @@ FIG_BASE_SIZE    <- 11   * TEXT_SCALE   # theme base size            (33pt)
 FIG_AXIS_TITLE   <- 9    * TEXT_SCALE   # x / y axis titles          (27pt)
 FIG_AXIS_TEXT    <- 8    * TEXT_SCALE   # tick labels                (24pt)
 FIG_STRIP_SIZE   <- 10   * TEXT_SCALE   # facet strip: group name, bold (30pt)
-FIG_STRIP_STATS  <- 9    * TEXT_SCALE   # n / r / slope line beneath it, plain
+## This one is now LIVE. It used to be inert: the strip was built with plotmath,
+## whose only size commands are fixed ratios, so the stats line was pinned to the
+## group name's size no matter what this said. The strip is HTML now
+## (strip_md() in 03_figures.R) and resolves this value per span, so changing the
+## number below really does resize the n / r / slope line -- and only that line.
+## Kept just under FIG_STRIP_SIZE so the two read as a matched pair with the
+## group name still leading; set it equal to FIG_STRIP_SIZE for identical sizes.
+FIG_STRIP_STATS  <- 9    * TEXT_SCALE   # n / r / slope line beneath it (27pt)
 ## NOT bumped, deliberately. The caption is now a single horizontal line, and at
 ## 18pt the logROE caption measures 11.7 in against an 11 in overlay figure, so it
 ## had to fold onto two lines -- which is exactly the vertical space the one-line
@@ -140,8 +151,8 @@ FIG_FONT          <- "sans"            # ONE family for theme AND annotations
 ## These two are absolute, NOT scaled by TEXT_SCALE -- ggplot linewidths are in
 ## mm, so they do not need to track the point sizes, and at 20/8 they rendered as
 ## solid black slabs thicker than the fit line they were framing.
-FIG_AXIS_LINE     <- 2.0               # bottom/left axis line width
-FIG_TICK_LINE     <- 1.6               # tick mark width
+FIG_AXIS_LINE     <- 4.0               # bottom/left axis line width
+FIG_TICK_LINE     <- 2.0               # tick mark width
 FIG_TICK_LEN      <- unit(0.22, "cm")  # POSITIVE = ticks point OUTWARD
 FIG_AXIS_TEXT_COL <- "grey15"          # tick labels: near-black, high contrast
 
