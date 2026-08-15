@@ -20,32 +20,56 @@
 ## values instead of redefining or falling back to defaults.
 ###############################################################################
 
-## Guard: this ONLY wraps the expensive, side-effecting package-install/load
-## step, so sourcing this file twice (e.g. once directly, once via Run_All.R)
-## doesn't repeat that work. It deliberately does NOT wrap anything below --
-## paths, styling constants, labels -- because those are cheap to redefine and
-## because gating them on "already loaded" is exactly what used to make an
-## edit to a value below (e.g. FIG_AXIS_LINE) invisible for the rest of an R
-## session: once .HTK_CONFIG_LOADED was TRUE, re-sourcing this file (directly,
-## or via the `if (!exists(".HTK_CONFIG_LOADED")) source(...)` guard at the
-## top of every other script) was a no-op, so a config edit only took effect
-## after restarting R. Every value below is now always re-evaluated on every
-## source(), so an edit here shows up the next time a script re-sources this
-## file -- no R restart required.
-if (!exists(".HTK_PKGS_LOADED")) {
+## NOTHING in this file is gated on "already loaded" except the one thing that
+## genuinely must run once (set.seed, below). That is deliberate, and it has bitten
+## this file twice.
+##
+## Once .HTK_CONFIG_LOADED was TRUE, re-sourcing this file -- directly, or via the
+## guard at the top of every other script -- was a no-op, so an edit to a value
+## here only took effect after restarting R. Every styling constant is therefore
+## always re-evaluated on every source(): edit one and the next script to
+## re-source this file picks it up, no restart. The second bite was the package
+## list; see the note above the attach loop.
 
 ## ---- 0. PACKAGES -------------------------------------------------------------
+## ggtext supplies element_markdown(), which is what lets one facet strip carry
+## the group name and the stats line at two DIFFERENT sizes. See strip_md() in
+## 03_figures.R.
 pkgs <- c("readxl", "writexl", "dplyr", "tidyr", "stringr",
-          "purrr", "tibble", "ggplot2", "broom", "gt")
-missing <- pkgs[!pkgs %in% rownames(installed.packages())]
-if (length(missing)) install.packages(missing)
-invisible(lapply(pkgs, library, character.only = TRUE))
+          "purrr", "tibble", "ggplot2", "broom", "gt", "ggtext")
+
+## Attaching runs on EVERY source(), deliberately, and is NOT inside the guard
+## below.
+##
+## It used to be, and that was a trap: the guard fires once per R session, so a
+## package ADDED to the list above was never attached in any session that had
+## already sourced this file -- the whole block was skipped and the new function
+## simply did not exist ("could not find function element_markdown"). A fresh
+## Rscript never sees it, because there the guard is always cold, so the failure
+## only shows up in a long-running session (RStudio) and only for whoever added
+## the package. This is the same staleness the comment below describes, and it
+## belongs in the same bin.
+##
+## requireNamespace() is a cheap already-installed check, and library() on an
+## attached package is a no-op, so paying this on every source() costs nothing.
+## The expensive part -- installed.packages(), which scans every library path --
+## is what stays guarded, further down.
+invisible(lapply(pkgs, function(p) {
+  if (!requireNamespace(p, quietly = TRUE)) install.packages(p)
+  library(p, character.only = TRUE)
+}))
+
+## Guard: this ONLY wraps work that must happen exactly once per session.
+## set.seed() is in here rather than above because every script re-sources this
+## file, and re-seeding at each of those points would restart the random stream
+## mid-pipeline and change the bootstrap results.
+if (!exists(".HTK_PKGS_LOADED")) {
 
 set.seed(42)
 
 .HTK_PKGS_LOADED <- TRUE
 
-}  ## end packages-only guard
+}  ## end once-per-session guard
 
 ## ---- 1. PATHS ------------------------------------------------------------
 ## PROJECT_DIR is the only hardcoded absolute path in the whole pipeline --
@@ -119,7 +143,18 @@ FIG_BASE_SIZE    <- 11   * TEXT_SCALE   # theme base size            (33pt)
 FIG_AXIS_TITLE   <- 9    * TEXT_SCALE   # x / y axis titles          (27pt)
 FIG_AXIS_TEXT    <- 8    * TEXT_SCALE   # tick labels                (24pt)
 FIG_STRIP_SIZE   <- 10   * TEXT_SCALE   # facet strip: group name, bold (30pt)
-FIG_STRIP_STATS  <- 9    * TEXT_SCALE   # n / r / slope line beneath it, plain
+## This one is LIVE -- change it and the n / r / slope line really does resize,
+## and only that line. It used to be inert: the strip was built with plotmath,
+## whose only size commands are the fixed ratios scriptstyle (~0.71x) and
+## scriptscriptstyle (~0.5x), so the stats line was pinned to the group name's
+## size and no value here could move it. The strip is HTML now (strip_md() in
+## 03_figures.R), which resolves a real font-size per line.
+##
+## Set it equal to FIG_STRIP_SIZE for identical sizes; 9 vs 10 leaves the stats
+## line a touch smaller so the group name still leads. Oversized values are
+## capped to what fits the strip rather than clipped -- the run prints the size
+## it actually used when that happens.
+FIG_STRIP_STATS  <- 9    * TEXT_SCALE   # n / r / slope line beneath it (27pt)
 ## NOT bumped, deliberately. The caption is now a single horizontal line, and at
 ## 18pt the logROE caption measures 11.7 in against an 11 in overlay figure, so it
 ## had to fold onto two lines -- which is exactly the vertical space the one-line
@@ -140,8 +175,8 @@ FIG_FONT          <- "sans"            # ONE family for theme AND annotations
 ## These two are absolute, NOT scaled by TEXT_SCALE -- ggplot linewidths are in
 ## mm, so they do not need to track the point sizes, and at 20/8 they rendered as
 ## solid black slabs thicker than the fit line they were framing.
-FIG_AXIS_LINE     <- 2.0               # bottom/left axis line width
-FIG_TICK_LINE     <- 1.6               # tick mark width
+FIG_AXIS_LINE     <- 4.0               # bottom/left axis line width
+FIG_TICK_LINE     <- 2.0               # tick mark width
 FIG_TICK_LEN      <- unit(0.22, "cm")  # POSITIVE = ticks point OUTWARD
 FIG_AXIS_TEXT_COL <- "grey15"          # tick labels: near-black, high contrast
 
