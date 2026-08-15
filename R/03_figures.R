@@ -355,41 +355,60 @@ text_width_in <- function(txt, size_pt, face = "plain") {
   grid::convertWidth(grid::grobWidth(g), "in", valueOnly = TRUE)
 }
 
-## Facet strip carrying a bold group name above a plain stats line, both at the
-## SAME size (FIG_STRIP_SIZE) -- matching the group name is the point, not an
-## independent size, so there is nothing left here for FIG_STRIP_STATS to
-## drive; that constant only sizes the overlay legend text now (see theme_fig).
+## Facet strip carrying a bold group name (FIG_STRIP_SIZE) above a plain stats
+## line at its OWN size (FIG_STRIP_STATS).
 ##
-## ggplot styles a strip with ONE element_text, so two weights in one strip
-## normally needs ggtext. plotmath does it without the dependency: atop() stacks
-## the lines and bold() weights the first. (An earlier version wrapped the
-## second line in scriptstyle(), which is a FIXED ~0.71x plotmath scale --
-## constant regardless of FIG_STRIP_STATS -- and is why that config value used
-## to look like it did nothing.) The catch is that a lookup vector passed to
-## labeller() is never parsed, so the panels are faceted on a column whose
-## LEVELS are the plotmath strings and label_parsed is applied to those.
-## `stats_txt` may contain newlines; each becomes another stacked atop() line.
-strip_math <- function(name, stats_txt) {
-  ## Quotes would end the plotmath string early; nothing else needs escaping.
-  clean <- function(s) gsub('"', "", s, fixed = TRUE)
+## Why this is HTML and not plotmath. ggplot styles a strip with ONE
+## element_text, so a single size applies to the whole label; the only way to
+## vary size within it is for the label itself to carry the sizes. plotmath
+## cannot: it stacks lines with atop() and weights them with bold(), but its
+## only size commands are the FIXED ratios scriptstyle (~0.71x) and
+## scriptscriptstyle (~0.5x). That is why FIG_STRIP_STATS appeared to do
+## nothing -- under plotmath the stats line was pinned either to the group
+## name's size or to 0.71x of it, and no value of the constant could move it.
+##
+## element_markdown() (ggtext) resolves per-span font-size, so both sizes are
+## real and independent. The catch that carries over from the plotmath version:
+## a lookup vector passed to labeller() is never processed, so the panels are
+## faceted on a column whose LEVELS are the markup strings and the labeller is
+## applied to those.
+##
+## `stats_txt` may contain newlines; each becomes another <br> line, and all of
+## them sit inside the one FIG_STRIP_STATS span.
+strip_md <- function(name, stats_txt, stats_pt = FIG_STRIP_STATS) {
+  ## gridtext parses this as HTML, so the three markup characters have to be
+  ## entities or a group name containing one would silently eat the rest of the
+  ## label. "*" is escaped too: it is markdown emphasis, not HTML.
+  esc <- function(s) {
+    s <- gsub("&", "&amp;", s, fixed = TRUE)
+    s <- gsub("<", "&lt;",  s, fixed = TRUE)
+    s <- gsub(">", "&gt;",  s, fixed = TRUE)
+    gsub("*", "\\*", s, fixed = TRUE)
+  }
   vapply(seq_along(name), function(i) {
-    lines <- strsplit(clean(stats_txt[i]), "\n", fixed = TRUE)[[1]]
-    inner <- sprintf('plain("%s")', lines)
-    body  <- inner[length(inner)]
-    for (k in rev(seq_len(length(inner) - 1)))
-      body <- sprintf("atop(%s, %s)", inner[k], body)
-    sprintf('atop(bold("%s"), %s)', clean(name[i]), body)
+    lines <- esc(strsplit(stats_txt[i], "\n", fixed = TRUE)[[1]])
+    sprintf(
+      "<span style='font-size:%.2fpt'>**%s**</span><br><span style='font-size:%.2fpt'>%s</span>",
+      FIG_STRIP_SIZE, esc(name[i]), stats_pt,
+      paste(lines, collapse = "<br>"))
   }, character(1))
 }
 
-## Add the plotmath strip column to `plot_data`, ready for
-## facet_wrap(~ .strip, labeller = label_parsed).
+## Add the markup strip column to `plot_data`, ready for
+## facet_wrap(~ .strip, labeller = label_value) with strip.text = element_markdown().
 ## glab() relabels the DISPLAYED group name ("Hydrocodone group" -> "CBP+Hydrocodone",
 ## per GROUP_LABELS in 00_config.R); the lookup vector stays NAMED by the real
 ## group values, so the facet still keys on the data and only the strip text
 ## changes.
-strip_facet_data <- function(plot_data, gvar, names_in_order, stats_txt) {
-  labs_v <- setNames(strip_math(glab(names_in_order), stats_txt), names_in_order)
+##
+## Both width decisions live here rather than at the three call sites, which all
+## used to repeat the one-line/two-line test: pick the layout that fits, then cap
+## the size so what is left cannot clip.
+strip_facet_data <- function(plot_data, gvar, names_in_order,
+                             stat_line, stat_strip, fig_w, n_panels = 2) {
+  txt <- if (stats_fit_one_line(stat_line, fig_w, n_panels)) stat_line else stat_strip
+  pt  <- fit_strip_stats(txt, fig_w, n_panels)
+  labs_v <- setNames(strip_md(glab(names_in_order), txt, pt), names_in_order)
   plot_data$.strip <- factor(labs_v[as.character(plot_data[[gvar]])],
                              levels = unname(labs_v))
   plot_data
@@ -407,14 +426,37 @@ strip_facet_data <- function(plot_data, gvar, names_in_order, stats_txt) {
 ## under-reads by about 0.12 in, which is the margin the 0.97 below allows for.
 strip_budget_in <- function(fig_w, n_panels) max((fig_w - 1.9) / n_panels, 1)
 
-## TRUE if every stats line fits on one strip line. The stats line now renders
-## at the same size as the group name (FIG_STRIP_SIZE, no scriptstyle shrink
-## -- see strip_math()), so it must be measured at that same size or this
-## under-estimates its width and lets text that will actually clip pass as
-## "fits on one line".
+## TRUE if every stats line fits on one strip line. Measured at FIG_STRIP_STATS,
+## which is the size the stats line is actually rendered at now that strip_md()
+## gives it its own span -- measuring at the group name's size instead would
+## mis-read the width in whichever direction the two constants differ.
 stats_fit_one_line <- function(txt, fig_w, n_panels) {
-  all(vapply(txt, text_width_in, numeric(1), FIG_STRIP_SIZE) <
+  all(vapply(txt, text_width_in, numeric(1), FIG_STRIP_STATS) <
         0.97 * strip_budget_in(fig_w, n_panels))
+}
+
+## Largest size at or below FIG_STRIP_STATS at which the chosen stats layout
+## still fits the strip.
+##
+## Needed because FIG_STRIP_STATS is a free knob now. ggplot clips strip text at
+## the panel edge instead of wrapping it, so a value that is simply too big for
+## the strip does not look too big -- it silently loses the end of the line,
+## which on these figures is the p value. Falling back to two lines is already
+## handled (stats_fit_one_line); this covers what is left, a SINGLE line that is
+## too wide on its own. The message is deliberate: the figure stays correct, but
+## the requested size was not honoured and that should not be silent.
+fit_strip_stats <- function(txt, fig_w, n_panels) {
+  ## Entries may hold several lines; the widest single line is what has to fit.
+  widest <- max(vapply(
+    unlist(strsplit(txt, "\n", fixed = TRUE)),
+    text_width_in, numeric(1), FIG_STRIP_STATS))
+  budget <- 0.97 * strip_budget_in(fig_w, n_panels)
+  if (widest <= budget) return(FIG_STRIP_STATS)
+  capped <- max(FIG_STRIP_STATS * budget / widest, 6)
+  message(sprintf(
+    "  FIG_STRIP_STATS %.1fpt would clip the strip; using %.1fpt for this figure",
+    FIG_STRIP_STATS, capped))
+  capped
 }
 
 ## Shared theme for every scatter figure. Pulling it out of the four builders is
@@ -714,8 +756,7 @@ make_figure1 <- function(data, yvar, ylab, tag,
   ## wrapping it.
   plot_data <- strip_facet_data(
     plot_data, "Plot_Group", as.character(summary_data$Plot_Group),
-    if (stats_fit_one_line(summary_data$stat_line, FIG1_W, 2))
-      summary_data$stat_line else summary_data$stat_strip)
+    summary_data$stat_line, summary_data$stat_strip, FIG1_W)
 
   p <- ggplot(plot_data, aes(x = X_disease, y = .data[[yvar]],
                              color = Plot_Group, shape = Plot_Group)) +
@@ -736,11 +777,13 @@ make_figure1 <- function(data, yvar, ylab, tag,
 
   if (stats_mode == "header") {
     ## Stats live on the strip, so the panel holds nothing but data. The label is
-    ## plotmath and carries its own weights, so the strip element must be plain.
-    p <- p + facet_wrap(~ .strip, scales = "fixed", labeller = label_parsed) +
-      theme(strip.text = element_text(face = "plain", size = FIG_STRIP_SIZE,
-                                      lineheight = 0.95,
-                                      margin = margin(b = 6, t = 2)))
+    ## HTML and carries its own weights AND sizes (see strip_md), so the element
+    ## must be plain and markdown-aware; its `size` is only the fallback for text
+    ## that no span covers.
+    p <- p + facet_wrap(~ .strip, scales = "fixed", labeller = label_value) +
+      theme(strip.text = element_markdown(face = "plain", size = FIG_STRIP_SIZE,
+                                          lineheight = 1.15,
+                                          margin = margin(b = 6, t = 2)))
   } else {
     ## Measure the box against the faceted panel it will actually be drawn in,
     ## then place it. ref_x is passed so it does not land on the "Healthy mean"
@@ -1206,8 +1249,7 @@ for (pr in PREDICTORS) {
     ## Strip labels settled before the plot is built (see make_figure1).
     d <- strip_facet_data(
       d, "Plot_Group", as.character(slopes$Plot_Group),
-      if (stats_fit_one_line(slopes$stat_line, XY_W, 2))
-        slopes$stat_line else slopes$stat_strip)
+      slopes$stat_line, slopes$stat_strip, XY_W)
 
     ## ---- group comparisons ----------------------------------------------------
     tt_x  <- t.test(d[[xv]] ~ d$Plot_Group)      # exposure difference
@@ -1267,12 +1309,12 @@ for (pr in PREDICTORS) {
         theme_fig(faceted = TRUE)
 
       if (sm == "header") {
-        ## Bold group name over a plain stats line, same size; the weights come
-        ## from the plotmath label, so the strip element itself is plain.
-        p_facet <- p_facet + facet_wrap(~ .strip, labeller = label_parsed) +
-          theme(strip.text = element_text(face = "plain", size = FIG_STRIP_SIZE,
-                                          lineheight = 0.95,
-                                          margin = margin(b = 6, t = 2)))
+        ## Bold group name over a plain stats line; both weights and both sizes
+        ## come from the HTML label (see strip_md), so the element is plain.
+        p_facet <- p_facet + facet_wrap(~ .strip, labeller = label_value) +
+          theme(strip.text = element_markdown(face = "plain", size = FIG_STRIP_SIZE,
+                                              lineheight = 1.15,
+                                              margin = margin(b = 6, t = 2)))
       } else {
         bf     <- box_fracs(p_facet + facet_wrap(~ Plot_Group,
                                        labeller = as_labeller(GROUP_LABELS)), XY_W, XY_H,
@@ -1492,8 +1534,7 @@ for (sc in MME_ROE_SCALES) {
   ## Strip labels settled before the plot is built (see make_figure1).
   d <- strip_facet_data(
     d, "Plot_Group", as.character(mr_stats$Plot_Group),
-    if (stats_fit_one_line(mr_stats$stat_line, XY_W, 2))
-      mr_stats$stat_line else mr_stats$stat_strip)
+    mr_stats$stat_line, mr_stats$stat_strip, XY_W)
 
   ## ---- group comparisons --------------------------------------------------------
   ## Two different questions, both worth having: the interaction F asks whether
@@ -1543,10 +1584,11 @@ for (sc in MME_ROE_SCALES) {
       theme_fig(faceted = TRUE)
 
     if (sm == "header") {
-      p_facet <- p_facet + facet_wrap(~ .strip, labeller = label_parsed) +
-        theme(strip.text = element_text(face = "plain", size = FIG_STRIP_SIZE,
-                                        lineheight = 0.95,
-                                        margin = margin(b = 6, t = 2)))
+      ## See make_figure1: sizes and weights both live in the HTML label.
+      p_facet <- p_facet + facet_wrap(~ .strip, labeller = label_value) +
+        theme(strip.text = element_markdown(face = "plain", size = FIG_STRIP_SIZE,
+                                            lineheight = 1.15,
+                                            margin = margin(b = 6, t = 2)))
     } else {
       bf     <- box_fracs(p_facet + facet_wrap(~ Plot_Group,
                                      labeller = as_labeller(GROUP_LABELS)),
