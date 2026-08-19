@@ -1218,6 +1218,15 @@ for (pr in PREDICTORS) {
     
     tests <- tibble(
       predictor = xtag, outcome = ytag,
+      ## `test` names the test as it should READ; `family` is what the FDR
+      ## correction below groups on. They cannot be the same column: `test`
+      ## embeds the OUTCOME tag for the outcome comparison ("NRS difference",
+      ## "PC1 difference", ...), so grouping on it put each of those in a family
+      ## of ONE and p.adjust() returned the raw p unchanged -- the four outcome
+      ## comparisons were silently uncorrected while the header claimed they
+      ## were corrected across the four outcomes.
+      family    = c("Exposure difference", "Outcome difference",
+                    "Slope difference"),
       test      = c(paste0(xtag, " difference (Welch t)"),
                     paste0(ytag, " difference (Welch t)"),
                     "Slope difference (x by Group interaction)"),
@@ -1350,12 +1359,16 @@ for (pr in PREDICTORS) {
 xy_slopes_tbl <- bind_rows(xy_slopes_all) %>%
   select(predictor, outcome, Plot_Group, n, mean_x, mean_y, slope, intercept, r, p)
 
-## FDR applied within each predictor x test-type family, across the 4 outcomes
+## FDR applied within each predictor x test-type family, across the 4 outcomes.
+## Grouped on `family`, not `test` -- see the note where `tests` is built.
+## (The exposure-difference family is the same comparison repeated once per
+## outcome rather than four distinct questions, so BH leaves it where it is;
+## it is the outcome-difference family that was going uncorrected.)
 xy_tests_tbl <- bind_rows(xy_tests_all) %>%
-  group_by(predictor, test) %>%
+  group_by(predictor, family) %>%
   mutate(p_FDR = p.adjust(p_value, "fdr")) %>%
   ungroup() %>%
-  select(predictor, outcome, test, statistic, df, p_value, p_FDR)
+  select(predictor, outcome, family, test, statistic, df, p_value, p_FDR)
 
 cat("\n===== SLOPE-DIFFERENCE TESTS (FDR across the 4 outcomes) =====\n")
 print(as.data.frame(xy_tests_tbl %>%

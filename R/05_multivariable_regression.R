@@ -254,6 +254,15 @@ if (nrow(mvr_wide)) {
   xv <- paste0("b_Receptor_std_", MVR_GROUPS[1])
   yv <- paste0("b_Receptor_std_", MVR_GROUPS[2])
   
+  ## Checked BEFORE the plot is built, not after: geom_text_repel() below is
+  ## called at construction time, so a `requireNamespace()` guard sitting under
+  ## the ggplot() call could never run -- the missing-package error had already
+  ## been raised and taken the whole script down with it.
+  if (!requireNamespace("ggrepel", quietly = TRUE)) {
+    message("ggrepel not installed -- installing for label placement in the dissociation scatter")
+    install.packages("ggrepel")
+  }
+
   p_scatter <- ggplot(mvr_wide, aes(x = .data[[xv]], y = .data[[yv]])) +
     geom_hline(yintercept = 0, colour = "grey70") +
     geom_vline(xintercept = 0, colour = "grey70") +
@@ -269,11 +278,6 @@ if (nrow(mvr_wide)) {
     theme_minimal(base_size = 11) +
     theme(panel.grid.minor = element_blank())
   
-  ok <- requireNamespace("ggrepel", quietly = TRUE)
-  if (!ok) {
-    message("ggrepel not installed -- installing for label placement in the dissociation scatter")
-    install.packages("ggrepel")
-  }
   ggsave(file.path(MVR_DIR, "MVR_hydrocodone_vs_tramadol_scatter.png"),
          p_scatter, width = 7.5, height = 7, dpi = 300)
 }
