@@ -398,6 +398,12 @@ diag_tbl <- bind_rows(lapply(MED_GROUPS, function(g) {
   keep <- c(MED_X, MED_M, MED_Y)
   d <- master[master$Plot_Group == g, , drop = FALSE]
   d <- d[stats::complete.cases(d[, keep, drop = FALSE]), keep, drop = FALSE]
+  ## The same is.finite() filter 15c/15d/15e apply, and for the same reason:
+  ## MED_X is log10(ROE), which is -Inf for the ROE == 0 subjects, and
+  ## complete.cases() does NOT drop -Inf. Without this line every correlation
+  ## involving MED_X came back NA, and the n reported here was the pre-filter n
+  ## (23 / 21) rather than the n the models above are actually fit on (19 / 17).
+  d <- d[apply(d, 1, function(r) all(is.finite(r))), , drop = FALSE]
   if (!nrow(d)) return(NULL)
   cmb <- utils::combn(keep, 2, simplify = FALSE)
   bind_rows(lapply(cmb, function(p) tibble(

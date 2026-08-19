@@ -162,15 +162,26 @@ pmed_prep <- function(df, xv, mvs, yv, covs = character(0), label = "") {
 ## hard-coded so PMED_M can be any length without editing the model string.
 pmed_syntax <- function(K, ncov = 0) {
 
-  cov_rhs <- if (ncov) paste("", paste0("+ d", seq_len(ncov), "*C", seq_len(ncov)),
-                             collapse = " ") else ""
+  ## ONE LABEL PER EQUATION. lavaan reads a REPEATED label as an EQUALITY
+  ## CONSTRAINT across the parameters carrying it, so emitting a single "d1" in
+  ## all K mediator equations AND in the Y equation silently forced covariate 1
+  ## to have the identical coefficient everywhere -- lavaan reported it as
+  ## "Number of equality constraints: K" and printed the same estimate on every
+  ## row. 17e (the pooled model, which passes the group dummy as C1) is the
+  ## caller that hits this, and it was fitting one shared covariate effect
+  ## instead of the K + 1 free ones the model is supposed to have. Labels are
+  ## qualified by their own equation ("dM1_1", "dY_1") so each stays free.
+  cov_rhs <- function(eq)
+    if (ncov) paste0(" + d", eq, "_", seq_len(ncov), "*C", seq_len(ncov),
+                     collapse = "") else ""
 
   a_paths <- paste0("  M", 1:K, " ~ a", 1:K, "*X",
-                    if (ncov) paste0(cov_rhs) else "", collapse = "\n")
+                    vapply(paste0("M", 1:K), cov_rhs, character(1)),
+                    collapse = "\n")
 
   y_path  <- paste0("  Y ~ cprime*X + ",
                     paste0("b", 1:K, "*M", 1:K, collapse = " + "),
-                    if (ncov) cov_rhs else "")
+                    cov_rhs("Y"))
 
   ## free residual covariances among mediators
   cors <- if (K > 1) {
