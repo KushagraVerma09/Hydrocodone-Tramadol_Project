@@ -87,6 +87,15 @@ HEALTHY_LINE_COLOR <- "#3B6D11"
 
 MIN_N_SLOPE <- 5   # groups smaller than this are dropped from slope models
 
+## Single switch for every Benjamini-Hochberg (FDR) correction in the
+## pipeline: 03_figures.R (slope-pair diffs, the outcome-comparison table,
+## the receptor-panel table), 05_multivariable_regression.R (the 19-receptor
+## screen), and 08_ht4_ht6_group_ttests.R. Every p.adjust(p, "fdr") call site
+## reads this flag instead of hard-coding "fdr", so p_FDR columns hold the
+## raw, uncorrected p-value (method = "none") when it's FALSE. Flip it to
+## TRUE to turn correction back on everywhere at once -- no other edit needed.
+APPLY_FDR_CORRECTION <- FALSE
+
 ## ---- 3. FIGURE TEXT SIZING -----------------------------------------------------
 ## Every text element in every figure scales off TEXT_SCALE. The figures are
 ## written large and then shrunk when several are composed onto one page

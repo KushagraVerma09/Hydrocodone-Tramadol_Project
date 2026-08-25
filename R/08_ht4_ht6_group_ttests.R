@@ -194,7 +194,7 @@ ht_tbl <- map_dfr(names(HT_SETS), ~ ht_compare_one(ht_data, .x)) %>%
   ## Three pre-specified measures, and the third is a function of the first
   ## two -- so BH across them is mild and reported for completeness. The two
   ## receptor rows are the pre-specified comparisons; read the raw p there.
-  mutate(p_welch_FDR = p.adjust(p_welch, "fdr"), .after = p_welch)
+  mutate(p_welch_FDR = p.adjust(p_welch, if (APPLY_FDR_CORRECTION) "fdr" else "none"), .after = p_welch)
 
 ## ---- 19d. CONSOLE REPORT -------------------------------------------------------
 

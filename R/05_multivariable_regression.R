@@ -155,8 +155,8 @@ mvr_tbl <- bind_rows(mvr_rows)
 ## which receptor happens to be in the model.
 mvr_tbl <- mvr_tbl %>%
   group_by(group) %>%
-  mutate(p_Receptor_FDR = p.adjust(p_Receptor, method = "fdr"),
-         p_ROE_FDR      = p.adjust(p_ROE,      method = "fdr")) %>%
+  mutate(p_Receptor_FDR = p.adjust(p_Receptor, method = if (APPLY_FDR_CORRECTION) "fdr" else "none"),
+         p_ROE_FDR      = p.adjust(p_ROE,      method = if (APPLY_FDR_CORRECTION) "fdr" else "none")) %>%
   ungroup() %>%
   mutate(sig_Receptor_raw = p_Receptor < 0.05,
          sig_Receptor_FDR = p_Receptor_FDR < 0.05) %>%
