@@ -912,7 +912,7 @@ slope_stats <- function(data, yvar, xvar = "X_disease", gvar = "Plot_Group", min
     r <- est_se(svec(pr[1]) - svec(pr[2]))
     tibble(outcome = yvar, group_1 = pr[1], group_2 = pr[2],
            slope_diff = r["est"], se = r["se"], t = r["t"], p_raw = r["p"])
-  }) %>% mutate(p_FDR = p.adjust(p_raw, "fdr"),
+  }) %>% mutate(p_FDR = p.adjust(p_raw, if (APPLY_FDR_CORRECTION) "fdr" else "none"),
                 p_bonferroni = p.adjust(p_raw, "bonferroni"),
                 sig_FDR = p_FDR < 0.05)
   
@@ -1073,7 +1073,7 @@ receptor_summary <- map_dfr(RECEPTORS, function(rc) {
     sd_CBPplusO   = if (length(p) > 1) sd(p) else NA_real_
   )
 }) %>%
-  mutate(p_FDR = p.adjust(p_value, "fdr"))
+  mutate(p_FDR = p.adjust(p_value, if (APPLY_FDR_CORRECTION) "fdr" else "none"))
 
 cat("\n===== RECEPTOR MEANS: Healthy vs CBP-O =====\n")
 print(as.data.frame(receptor_summary), row.names = FALSE, digits = 4)
@@ -1366,7 +1366,7 @@ xy_slopes_tbl <- bind_rows(xy_slopes_all) %>%
 ## it is the outcome-difference family that was going uncorrected.)
 xy_tests_tbl <- bind_rows(xy_tests_all) %>%
   group_by(predictor, family) %>%
-  mutate(p_FDR = p.adjust(p_value, "fdr")) %>%
+  mutate(p_FDR = p.adjust(p_value, if (APPLY_FDR_CORRECTION) "fdr" else "none")) %>%
   ungroup() %>%
   select(predictor, outcome, family, test, statistic, df, p_value, p_FDR)
 
