@@ -94,10 +94,13 @@
 ##   increase in log10 ROE".
 ##
 ## THE -Inf TRAP
-##   log_ROE = log10(ROE) is -Inf for the 4 subjects per group with ROE == 0,
-##   and complete.cases() does NOT drop -Inf. Every model frame below is
-##   filtered with is.finite(), matching sections 16 and 17. Expect n = 19
-##   (hydrocodone) and n = 17 (tramadol).
+##   log_ROE = log10(ROE) is -Inf for the 4 subjects per group with ROE == 0
+##   when ROE_ZERO_IMPUTE (00_config.R) is FALSE, and complete.cases() does
+##   NOT drop -Inf. Every model frame below is filtered with is.finite(),
+##   matching sections 16 and 17. Expect n = 19 (hydrocodone) and n = 17
+##   (tramadol) with the switch off; with it on (the default -- see
+##   01_load_data.R) those subjects get a finite, imputed log_ROE instead and
+##   n rises to 23 / 21.
 ##
 ## Self-contained: needs `master`, `FOCUS_GROUPS`, `OUT_DIR`, `fmt_p`,
 ## `custom_colors` and `MED_LABELS` (all from 00_config.R/01_load_data.R), and

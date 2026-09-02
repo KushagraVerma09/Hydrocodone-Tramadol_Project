@@ -55,24 +55,62 @@ behavior <- behavior %>%
   ##
   ## On that scale a 0 does not mean "no opioid": it means ROE = 1e-5 mg/L,
   ## a real concentration BELOW the smallest measured value (3.7e-5, which
-  ## maps to 0.568). Those 8 points would enter every model at an invented
-  ## x at the edge of the range, carrying ~25% of the leverage while being
-  ## 16% of the sample, and they move the between-drug omnibus test
-  ## (section 20) from p = .0003 to p = .096.
+  ## maps to 0.568). That column is not used; log_ROE is computed from the
+  ## raw ROE column below instead.
   ##
-  ## So log_ROE is recomputed as log10(ROE) below and the zero-exposure
-  ## subjects fall out on the is.finite() filters in sections 15-18 and 20.
-  ## Do not "restore" the sheet's column without reading this first.
+  ## log_ROE = log10(ROE) is -Inf for the ROE == 0 subjects (9 total, 8 of
+  ## them in the two focus groups -- 4 Hydrocodone, 4 Tramadol). What happens
+  ## to those rows is controlled by ROE_ZERO_IMPUTE (00_config.R):
+  ##
+  ##   FALSE: log_ROE stays -Inf for them, and every is.finite() filter
+  ##   downstream (sections 15-18 and 20) drops them. Every model keyed on
+  ##   log_ROE then runs at n = 19/17 (36 pooled). This reproduces every
+  ##   number published before this switch was added.
+  ##
+  ##   TRUE (the default): ROE == 0 is recoded to ROE_ZERO_IMPUTE_DECADES
+  ##   decades below min(ROE[ROE > 0]) before taking the log, so log_ROE is
+  ##   finite for those subjects and they re-enter every model, raising n to
+  ##   23/21 (44 pooled). The minimum is taken ACROSS BOTH FOCUS GROUPS, not
+  ##   per group: Hydrocodone's minimum positive ROE (4.0e-4) is an order of
+  ##   magnitude above Tramadol's (3.7e-5), so a per-group floor would place
+  ##   the two groups' imputed subjects at different log_ROE values and
+  ##   manufacture a between-drug difference in the exposure itself -- which
+  ##   would bias section 20's drug x log_ROE interaction, the test that
+  ##   section 20 exists to run cleanly.
+  ##
+  ##   At ROE_ZERO_IMPUTE_DECADES = 2 this recodes ROE == 0 to 3.7e-7 mg/L,
+  ##   i.e. log_ROE = -6.432 -- two decades below the smallest MEASURED value
+  ##   (3.7e-5, log_ROE = -4.432), not two decades below zero. This is NOT a
+  ##   free change: those 8 points then sit outside the entire observed range
+  ##   and carry roughly 60% of log_ROE's total x-variance (SD of log_ROE
+  ##   rises from 0.80 to 1.40) -- more leverage than the sheet's own
+  ##   hand-typed zero above, which, at only 0.6 decades below the minimum,
+  ##   was still enough to move the section-20 omnibus test from p = .0003 to
+  ##   p = .096. Report which setting of ROE_ZERO_IMPUTE produced a given
+  ##   number; treat the other as the sensitivity check.
   select(-any_of(c("log.PainDur", "logMME", "logROE", "Log.OpDur", "X"))) %>%
   rename(DOU = Op.Dur, SOWS = sows, COMM = comm) %>%
   mutate(
-    Group_beh   = if_else(Group == 0, "CBP-O", "CBP+O"),
-    log_PainDur = log10(PainDur),
-    log_MME     = log10(MME),
-    log_ROE     = log10(ROE),
-    log_DOU     = log10(DOU)
+    Group_beh       = if_else(Group == 0, "CBP-O", "CBP+O"),
+    log_PainDur     = log10(PainDur),
+    log_MME         = log10(MME),
+    ## ROE_ZERO_IMPUTE / ROE_ZERO_IMPUTE_DECADES come from 00_config.R -- see
+    ## the note above. .roe_floor is the smallest positive ROE across the
+    ## whole sheet (deliberately not group-specific -- see the note);
+    ## log_ROE_imputed flags exactly the recoded rows so downstream
+    ## diagnostics (Cook's distance, added-variable plots) can identify them
+    ## at a glance; ROE_imp is ROE with 0 recoded to the imputed floor
+    ## wherever that flag is set, unchanged everywhere else.
+    .roe_floor      = if (any(ROE > 0, na.rm = TRUE))
+                         min(ROE[ROE > 0], na.rm = TRUE) else NA_real_,
+    log_ROE_imputed = ROE_ZERO_IMPUTE & !is.na(ROE) & ROE == 0,
+    ROE_imp         = if_else(log_ROE_imputed,
+                              .roe_floor / 10^ROE_ZERO_IMPUTE_DECADES,
+                              ROE),
+    log_ROE         = log10(ROE_imp),
+    log_DOU         = log10(DOU)
   ) %>%
-  select(-Group)
+  select(-Group, -.roe_floor, -ROE_imp)
 
 ## -- 2c. principal components
 pca <- read_excel(F_PCA)

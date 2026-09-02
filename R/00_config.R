@@ -96,6 +96,31 @@ MIN_N_SLOPE <- 5   # groups smaller than this are dropped from slope models
 ## TRUE to turn correction back on everywhere at once -- no other edit needed.
 APPLY_FDR_CORRECTION <- FALSE
 
+## Single switch for how log_ROE handles the ROE == 0 subjects (01_load_data.R
+## computes log_ROE = log10(ROE), which is otherwise -Inf for them). Read by
+## 01_load_data.R only -- every downstream is.finite()/complete.cases() filter
+## that used to drop these rows stays exactly as it is, and simply stops
+## firing on log_ROE while this is TRUE. Flip to FALSE to restore the
+## complete-case behaviour (log_ROE == -Inf for ROE == 0, dropped everywhere)
+## with no other edit -- that is what reproduces every previously published
+## number.
+##
+## TRUE:  ROE == 0 is recoded to ROE_ZERO_IMPUTE_DECADES decades below
+##        min(ROE[ROE > 0]) (pooled across both drug groups -- see the note at
+##        01_load_data.R for why not per-group), and log_ROE is finite for
+##        those subjects. n rises from 19/17 (36 pooled) to 23/21 (44 pooled)
+##        in every model keyed on log_ROE.
+## FALSE: log_ROE == log10(0) == -Inf for those subjects, and every
+##        is.finite() filter downstream drops them, as today.
+##
+## This is not a free change: the imputed points land ROE_ZERO_IMPUTE_DECADES
+## decades outside the observed range and dominate the leverage of any model
+## containing log_ROE (see 01_load_data.R for the numbers). Treat TRUE as the
+## primary analysis and FALSE as the sensitivity check, or vice versa -- but
+## report which one produced a given number.
+ROE_ZERO_IMPUTE         <- TRUE
+ROE_ZERO_IMPUTE_DECADES <- 2
+
 ## ---- 3. FIGURE TEXT SIZING -----------------------------------------------------
 ## Every text element in every figure scales off TEXT_SCALE. The figures are
 ## written large and then shrunk when several are composed onto one page
