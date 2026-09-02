@@ -62,16 +62,22 @@
 ##         opposite signs in two neighbouring outputs.
 ##
 ## WHY NOTHING IS REFIT HERE
-##   The pooled fits in 20b are the ONLY place these models are fit. Section 18
-##   used to fit them and report only the interaction rows; that loop moved here
-##   whole. 20c reads the stored `lm` objects and describes them. There is
-##   deliberately no second fitting path, so the coefficient table and the
-##   interaction table cannot drift apart.
+##   The pooled fits in 20b are the ONLY place the pooled NRS models are fit.
+##   Section 18 used to fit them and report only the interaction rows; that
+##   loop moved here whole, into preg_fit_all() -- the ONLY fitting logic for
+##   a pooled model, for any outcome: 20b calls it once for NRS, 20j calls it
+##   again for SOWS, and neither outcome has a second, independently-written
+##   copy of the loop. 20c reads the stored `lm` objects and describes them.
+##   There is deliberately no second fitting path for a given outcome, so the
+##   coefficient table and the interaction table cannot drift apart.
 ##
-## EXPOSURE: log_ROE, n = 36
-##   log_ROE = log10(ROE) is -Inf for the subjects with ROE == 0, and the
-##   is.finite() filter drops them -- same rule as sections 15-18, so the pooled
-##   n (36) is exactly the two stratified n's added together (19 + 17).
+## EXPOSURE: log_ROE, n = 36 or 44 depending on ROE_ZERO_IMPUTE (00_config.R)
+##   log_ROE = log10(ROE) is -Inf for the subjects with ROE == 0. With
+##   ROE_ZERO_IMPUTE FALSE the is.finite() filter drops them -- same rule as
+##   sections 15-18 -- so the pooled n (36) is exactly the two stratified n's
+##   added together (19 + 17). With it TRUE (the default) those 8 subjects
+##   get a finite, imputed log_ROE instead (01_load_data.R) and the pooled n
+##   rises to 44 (23 + 21).
 ##
 ##   The source spreadsheet also carries its own logROE column, computed as
 ##   LOG10(100000*ROE). The x100000 is algebraically a +5 shift and is
@@ -81,7 +87,8 @@
 ##   concentration BELOW the smallest measured value. Those 8 points would enter
 ##   at an invented x carrying ~25% of the leverage, and they move the omnibus
 ##   test from p = .0003 to p = .096. That column is therefore not used; see the
-##   note at 01_load_data.R.
+##   note at 01_load_data.R for both that and the (larger) leverage cost of the
+##   ROE_ZERO_IMPUTE default.
 ##
 ## Self-contained: needs `master`, `FOCUS_GROUPS`, `OUT_DIR` (00_config.R /
 ## 01_load_data.R) and section 18's helpers and fitted objects
@@ -152,63 +159,80 @@ PREG_GROUP_LAB <- "Both groups (pooled)"
 ## the model-level F test asks whether the drugs differ on any slope at all.
 ##
 ## Moved here from section 18e unchanged. This is the only place in the pipeline
-## where the pooled models are fit.
+## where the pooled NRS models are fit -- and, per outcome, the only place any
+## pooled model is fit: preg_fit_all() below is the fitting logic, called once
+## here for NRS and again in 20j for SOWS, so neither outcome gets a second,
+## drifting copy of the loop.
+##
+## preg_fit_all() returns four pieces: `pool` (the group-filtered data used for
+## every model key), `inter_fits` (named by model key: list(add, int, data,
+## preds)), `interaction_tbl` (one row per drug x predictor interaction term)
+## and `intomni_tbl` (the nested-F omnibus row per model key).
+preg_fit_all <- function(y_var, model_defs) {
+  pool <- master %>%
+    dplyr::filter(!is.na(Plot_Group), Plot_Group %in% MREG_GROUPS) %>%
+    dplyr::mutate(.grp = factor(as.character(Plot_Group), levels = MREG_GROUPS))
 
-mreg_pool <- master %>%
-  dplyr::filter(!is.na(Plot_Group), Plot_Group %in% MREG_GROUPS) %>%
-  dplyr::mutate(.grp = factor(as.character(Plot_Group), levels = MREG_GROUPS))
+  inter_rows   <- list()
+  intomni_rows <- list()
+  inter_fits   <- list()
 
-mreg_inter_rows  <- list()
-mreg_intomni_rows <- list()
-mreg_inter_fits  <- list()
+  for (mk in names(model_defs)) {
+    preds <- model_defs[[mk]]
+    vars  <- c(y_var, preds, ".grp")
+    if (!all(setdiff(vars, ".grp") %in% names(pool))) next
 
-for (mk in names(MREG_MODELS)) {
-  preds <- MREG_MODELS[[mk]]
-  vars  <- c(MREG_Y, preds, ".grp")
-  if (!all(setdiff(vars, ".grp") %in% names(mreg_pool))) next
+    dp <- as.data.frame(pool[, vars, drop = FALSE])
+    dp <- dp[stats::complete.cases(dp), , drop = FALSE]
+    num <- setdiff(vars, ".grp")
+    dp  <- dp[apply(dp[, num, drop = FALSE], 1, function(r) all(is.finite(r))), , drop = FALSE]
+    if (nrow(dp) < MREG_MIN_N || nlevels(droplevels(dp$.grp)) < 2) next
 
-  dp <- as.data.frame(mreg_pool[, vars, drop = FALSE])
-  dp <- dp[stats::complete.cases(dp), , drop = FALSE]
-  num <- setdiff(vars, ".grp")
-  dp  <- dp[apply(dp[, num, drop = FALSE], 1, function(r) all(is.finite(r))), , drop = FALSE]
-  if (nrow(dp) < MREG_MIN_N || nlevels(droplevels(dp$.grp)) < 2) next
+    rhs   <- paste(sprintf("`%s`", preds), collapse = " + ")
+    m_add <- stats::lm(stats::as.formula(sprintf("`%s` ~ .grp + %s", y_var, rhs)), data = dp)
+    m_int <- stats::lm(stats::as.formula(sprintf("`%s` ~ .grp * (%s)", y_var, rhs)), data = dp)
+    inter_fits[[mk]] <- list(add = m_add, int = m_int, data = dp, preds = preds)
 
-  rhs  <- paste(sprintf("`%s`", preds), collapse = " + ")
-  m_add <- stats::lm(stats::as.formula(sprintf("`%s` ~ .grp + %s", MREG_Y, rhs)), data = dp)
-  m_int <- stats::lm(stats::as.formula(sprintf("`%s` ~ .grp * (%s)", MREG_Y, rhs)), data = dp)
-  mreg_inter_fits[[mk]] <- list(add = m_add, int = m_int, data = dp, preds = preds)
+    ci <- suppressWarnings(stats::confint(m_int))
+    cf <- summary(m_int)$coefficients
+    keep <- grep("^\\.grp.*:", rownames(cf))
 
-  ci <- suppressWarnings(stats::confint(m_int))
-  cf <- summary(m_int)$coefficients
-  keep <- grep("^\\.grp.*:", rownames(cf))
+    if (length(keep)) {
+      trm <- rownames(cf)[keep]
+      inter_rows[[mk]] <- tibble::tibble(
+        model      = mk,
+        term       = gsub("`", "", trm),
+        predictor  = gsub("`", "", sub("^.*:", "", trm)),
+        comparison = paste0(MREG_GROUPS[2], " minus ", MREG_GROUPS[1]),
+        n          = nrow(dp),
+        est        = cf[keep, 1],
+        se         = cf[keep, 2],
+        t          = cf[keep, 3],
+        p          = cf[keep, 4],
+        ci_lo      = ci[match(trm, rownames(ci)), 1],
+        ci_hi      = ci[match(trm, rownames(ci)), 2]
+      )
+    }
 
-  if (length(keep)) {
-    trm <- rownames(cf)[keep]
-    mreg_inter_rows[[mk]] <- tibble::tibble(
-      model      = mk,
-      term       = gsub("`", "", trm),
-      predictor  = gsub("`", "", sub("^.*:", "", trm)),
-      comparison = paste0(MREG_GROUPS[2], " minus ", MREG_GROUPS[1]),
-      n          = nrow(dp),
-      est        = cf[keep, 1],
-      se         = cf[keep, 2],
-      t          = cf[keep, 3],
-      p          = cf[keep, 4],
-      ci_lo      = ci[match(trm, rownames(ci)), 1],
-      ci_hi      = ci[match(trm, rownames(ci)), 2]
+    av <- stats::anova(m_add, m_int)
+    intomni_rows[[mk]] <- tibble::tibble(
+      model  = mk, n = nrow(dp),
+      df_num = av$Df[2], df_den = av$Res.Df[2],
+      F_stat = av$F[2],  p = av$`Pr(>F)`[2]
     )
   }
 
-  av <- stats::anova(m_add, m_int)
-  mreg_intomni_rows[[mk]] <- tibble::tibble(
-    model  = mk, n = nrow(dp),
-    df_num = av$Df[2], df_den = av$Res.Df[2],
-    F_stat = av$F[2],  p = av$`Pr(>F)`[2]
-  )
+  list(pool = pool, inter_fits = inter_fits,
+       interaction_tbl = dplyr::bind_rows(inter_rows),
+       intomni_tbl     = dplyr::bind_rows(intomni_rows))
 }
 
-mreg_interaction_tbl <- dplyr::bind_rows(mreg_inter_rows)
-mreg_intomni_tbl     <- dplyr::bind_rows(mreg_intomni_rows)
+preg_nrs_fit <- preg_fit_all(MREG_Y, MREG_MODELS)
+
+mreg_pool             <- preg_nrs_fit$pool
+mreg_inter_fits       <- preg_nrs_fit$inter_fits
+mreg_interaction_tbl  <- preg_nrs_fit$interaction_tbl
+mreg_intomni_tbl      <- preg_nrs_fit$intomni_tbl
 
 cat("\n================================================================\n")
 cat("20. BETWEEN-DRUG COMPARISON: ", MREG_Y, " ~ drug x (log ROE + 5-HT4 / 5-HT6)\n", sep = "")
@@ -415,9 +439,12 @@ print(as.data.frame(preg_nested_tbl), row.names = FALSE, digits = 3)
 ## predictor interacted with group is algebraically identical to fitting the two
 ## groups separately, so what comes out here MUST equal section 18's stratified
 ## HT4_HT6 coefficients. 20g prints that comparison.
-
-preg_group_slopes <- local({
-  m   <- preg_fi$int
+##
+## Pulled out as a function of the fitted (add, int, data, preds) list rather
+## than closing over `preg_fi`, so 20j can derive the same two numbers for the
+## pooled SOWS interaction model without a second copy of this arithmetic.
+preg_group_slopes_for <- function(fit_obj) {
+  m   <- fit_obj$int
   b   <- stats::coef(m)
   V   <- stats::vcov(m)
   raw <- names(b)
@@ -431,7 +458,7 @@ preg_group_slopes <- local({
   gi <- function(nm) { j <- match(nm, cl); if (is.na(j)) NULL else j }
 
   rows <- list()
-  for (pv in preg_fi$preds) {
+  for (pv in fit_obj$preds) {
     i_main <- gi(pv)
     i_int  <- gi(paste0("group_x_", preg_tag(pv)))
     if (is.null(i_main) || is.null(i_int)) next
@@ -456,7 +483,9 @@ preg_group_slopes <- local({
   out <- dplyr::bind_rows(rows)
   if (nrow(out)) out$p_fmt <- mreg_fmt_p(out$p)
   out
-})
+}
+
+preg_group_slopes <- preg_group_slopes_for(preg_fi)
 
 if (nrow(preg_group_slopes)) {
   cat("\n----- EACH DRUG'S SLOPE, DERIVED FROM THE INTERACTION MODEL -----\n")
@@ -814,6 +843,152 @@ writexl::write_xlsx(preg_sheets,
 
 message("\nSection 20 (between-drug comparison) written to: ",
         normalizePath(PREG_DIR, mustWork = FALSE))
+
+
+## ---- 20j. THE SAME COMPARISON, WITH SOWS AS THE OUTCOME ----------------------
+## Mirrors 07's section 18l: everything above (20a-20h) tests NRS pain; this
+## block reruns the identical drug-pooled M_add/M_int comparison with SOWS
+## (withdrawal) as the outcome. Same fitting function as 20b (preg_fit_all())
+## and the same slope arithmetic as 20d (preg_group_slopes_for()) -- SOWS gets
+## its own call to each, not a second copy of either, so the two outcomes
+## cannot drift apart the way two independently-written fitting loops would.
+##
+## Scope is deliberately narrower than 20a-20h: the coefficient table, the
+## nested F, each drug's derived slope, and the pooled table figure -- the
+## same four things 18l reports for the stratified SOWS models, but pooled.
+## No marginal-effect / interaction-forest figures (20e) and no self-check
+## (20g): both of those exist because NRS's stratified fits (mreg_coef_tbl)
+## are already sitting in this session from section 18 and used across
+## several figures; SOWS's stratified fits (mreg_sows, from 18l) are not
+## reused by anything else, so duplicating that machinery here for a
+## consistency check nothing else depends on would be scope the request did
+## not ask for.
+##
+## SOWS cannot be a predictor of itself, so it is stripped from every model
+## (a no-op today, since no model here contains SOWS -- kept as a guard, same
+## reasoning and same no-op status as 18l's MREG_MODELS_SOWS).
+##
+## TWO model-definition lists, not one, and they are NOT interchangeable:
+##   MREG_MODELS_FOR_SOWS  real column names (log_ROE, R_5HT4, ...) -- what
+##                         preg_fit_all() needs to build a formula and index
+##                         `master`. Same shape as MREG_MODELS_SOWS in 18l.
+##   PREG_MODELS_SOWS      the POST-FIT renamed term vocabulary
+##                         (group_TvsH, group_x_5HT4, ...) that
+##                         preg_clean_terms() produces once a model is
+##                         already fit. These names are not columns of
+##                         `master` -- passing this to preg_fit_all() finds no
+##                         matching columns and silently fits nothing, which
+##                         is what happened before this comment was added.
+##                         It is only for mreg_table_figure()'s `models`
+##                         argument (20f uses PREG_MODELS the same way),
+##                         which reads row labels out of the ALREADY-RENAMED
+##                         coefficient table.
+PREG_Y_SOWS           <- "SOWS"
+MREG_MODELS_FOR_SOWS  <- lapply(MREG_MODELS, setdiff, PREG_Y_SOWS)
+PREG_MODELS_SOWS      <- lapply(PREG_MODELS, setdiff, PREG_Y_SOWS)
+
+PREG_DIR_SOWS <- file.path(OUT_DIR, "between_drug_comparison_SOWS")
+dir.create(PREG_DIR_SOWS, showWarnings = FALSE, recursive = TRUE)
+
+cat("\n================================================================\n")
+cat("20j. BETWEEN-DRUG COMPARISON: ", PREG_Y_SOWS,
+    " ~ drug x (log ROE + 5-HT4 / 5-HT6)\n", sep = "")
+cat("     All coefficients read ", MREG_GROUPS[2], " MINUS ", MREG_GROUPS[1], ".\n", sep = "")
+cat("================================================================\n")
+
+preg_sows_fit <- preg_fit_all(PREG_Y_SOWS, MREG_MODELS_FOR_SOWS)
+preg_sows_fi  <- preg_sows_fit$inter_fits[[MREG_FULL]]
+
+if (is.null(preg_sows_fi)) {
+
+  warning("09 (20j): no pooled SOWS fit for '", MREG_FULL, "' -- section skipped.")
+
+} else {
+
+  preg_sows_desc <- list(
+    Pooled_main   = preg_describe(preg_sows_fi$add, "Pooled_main"),
+    Pooled_grpint = preg_describe(preg_sows_fi$int, "Pooled_grpint")
+  )
+
+  preg_sows_coef_tbl <- dplyr::bind_rows(lapply(preg_sows_desc, `[[`, "coef")) %>%
+    dplyr::mutate(model_lab = unname(PREG_MODEL_LABELS[model]),
+                  term_lab  = ifelse(term == "(Intercept)", "Intercept",
+                                     vapply(term, mreg_lab, character(1))),
+                  p_fmt     = mreg_fmt_p(p))
+  preg_sows_fit_tbl <- dplyr::bind_rows(lapply(preg_sows_desc, `[[`, "fit"))
+
+  preg_sows_nested_tbl <- preg_sows_fit$intomni_tbl %>%
+    dplyr::filter(model == MREG_FULL) %>%
+    dplyr::mutate(reduced = "Pooled_main", full = "Pooled_grpint",
+                  added_terms = "drug x each predictor",
+                  p_fmt = mreg_fmt_p(p)) %>%
+    dplyr::select(reduced, full, added_terms, n, df_num, df_den, F_stat, p, p_fmt)
+
+  cat("\n----- POOLED SOWS MODEL COEFFICIENTS (raw units) -----\n\n")
+  print(as.data.frame(preg_sows_coef_tbl %>%
+          dplyr::select(model, term, est, se, ci_lo, ci_hi, t, p, vif)),
+        row.names = FALSE, digits = 3)
+
+  cat("\n----- POOLED SOWS MODEL FIT -----\n\n")
+  print(as.data.frame(preg_sows_fit_tbl %>%
+          dplyr::select(model, n, R2, adj_R2, F_stat, df1, df2, F_p,
+                        RMSE, AIC, max_VIF, shapiro_p, bp_p)),
+        row.names = FALSE, digits = 3)
+
+  cat("\n----- DO THE DRUGS DIFFER ON SOWS? (nested F, Model 1 vs Model 2) -----\n\n")
+  print(as.data.frame(preg_sows_nested_tbl), row.names = FALSE, digits = 3)
+
+  preg_sows_group_slopes <- preg_group_slopes_for(preg_sows_fi)
+
+  if (nrow(preg_sows_group_slopes)) {
+    cat("\n----- EACH DRUG'S SOWS SLOPE, DERIVED FROM THE INTERACTION MODEL -----\n")
+    cat("(not separately fit: main effect for ", MREG_GROUPS[1],
+        ", main + interaction for ", MREG_GROUPS[2], ")\n\n", sep = "")
+    print(as.data.frame(preg_sows_group_slopes %>%
+            dplyr::select(predictor, group, est, se, ci_lo, ci_hi, t, p)),
+          row.names = FALSE, digits = 3)
+  }
+
+  mreg_table_figure(
+    PREG_GROUP_LAB, PREG_MODELS_SOWS, preg_sows_coef_tbl, preg_sows_fit_tbl,
+    PREG_Y_SOWS, dir = PREG_DIR_SOWS, file = "PREG_SOWS_table_pooled.png",
+    shorts = PREG_MODEL_SHORT,
+    caption = paste0("*** p < .001, ** p < .01, * p < .05.  Drug is a factor with ",
+                     MREG_GROUPS[1], " as reference, so every 'drug' row reads ",
+                     MREG_GROUPS[2], " minus ", MREG_GROUPS[1], ".\n",
+                     "In P2 the plain receptor and ROE rows are that predictor's slope in ",
+                     MREG_GROUPS[1], "; add the matching interaction row for ", MREG_GROUPS[2],
+                     " (both drugs' slopes are tabulated in the .xlsx)."))
+
+  writexl::write_xlsx(
+    list(
+      Pooled_coefficients = preg_sows_coef_tbl %>%
+        dplyr::select(group, model, model_lab, term, term_lab, est, se, t, p, p_fmt,
+                      ci_lo, ci_hi, vif),
+      Pooled_model_fit     = preg_sows_fit_tbl,
+      Nested_test          = preg_sows_nested_tbl,
+      Derived_group_slopes = if (nrow(preg_sows_group_slopes)) preg_sows_group_slopes else
+        tibble::tibble(note = "no interaction model fit"),
+      Config = tibble::tibble(
+        setting = c("outcome", "exposure", "groups", "models", "note", "output_dir"),
+        value = c(
+          PREG_Y_SOWS, MREG_X, paste(MREG_GROUPS, collapse = " | "),
+          paste(sprintf("%s: %s ~ %s", names(PREG_MODELS_SOWS), PREG_Y_SOWS,
+                        vapply(PREG_MODELS_SOWS, paste, character(1), collapse = " + ")),
+                collapse = "  |  "),
+          paste0("Same pooled model set as the NRS comparison (section 20) with SOWS ",
+                 "moved from a covariate-free right-hand side to the outcome. Table and ",
+                 "numbers only -- see the NRS output folder for the marginal-effect and ",
+                 "interaction-forest figures, which are NRS-specific."),
+          PREG_DIR_SOWS
+        )
+      )
+    ),
+    file.path(PREG_DIR_SOWS, "Stats_Between_Drug_Comparison_SOWS.xlsx"))
+
+  message("Section 20j (SOWS) written to: ",
+          normalizePath(PREG_DIR_SOWS, mustWork = FALSE))
+}
 
 
 ## ---- 20i. NOTES --------------------------------------------------------------
