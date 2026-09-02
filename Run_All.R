@@ -20,6 +20,10 @@
 ##       SOWS as the outcome
 ##   08  5-HT4 / 5-HT6 activity compared BETWEEN the two drug groups
 ##       (Welch t-tests, effect sizes, group-mean and difference CI figures)
+##   09  between-drug comparison: the same predictors in ONE model with drug as
+##       a predictor, plus drug x predictor interactions -- the test of whether
+##       the two drugs share slopes at all, which is what licenses 07's
+##       stratified design. Runs before 02, which builds Table 4 from it.
 ##
 ## Any of R/0N_*.R can also be run on its own (Rscript R/0N_....R, or source()
 ## it directly) -- each one loads whatever it needs (config/data/table1) the
@@ -34,16 +38,22 @@
 PROJECT_DIR <- "/Users/kushagraverma/Work/Projects/Hydrocodone+Tramadol_Project"
 R_DIR       <- file.path(PROJECT_DIR, "R")
 
-## 07 runs BEFORE 02, out of numerical order and deliberately: 02 section 11
-## builds Tables 2 and 3 out of 07's fitted objects (mreg_coef_tbl, mreg_fit_tbl,
-## mreg_sows). 02's guard would source 07 itself if they were missing, but then
-## this loop would source 07 a SECOND time -- 07 has no idempotency guard, so
-## every model would be refit and all ~30 of its figures redrawn twice per run.
-## Running it first satisfies the guard instead. 07 is self-bootstrapping
-## (it sources 00 and 01 if needed), so nothing else has to move.
+## 07 and 09 run BEFORE 02, out of numerical order and deliberately: 02 builds
+## Tables 2 and 3 out of 07's fitted objects (mreg_coef_tbl, mreg_fit_tbl,
+## mreg_sows) and Table 4 out of 09's (preg_coef_tbl, preg_fit_tbl). 02's guards
+## would source them itself if they were missing, but then this loop would source
+## each a SECOND time -- neither has an idempotency guard, so every model would
+## be refit and all their figures redrawn twice per run. Running them first
+## satisfies the guards instead.
+##
+## 09 must also come after 07 regardless of 02: it reuses 07's helpers and its
+## stratified fits (`mreg_fits`) rather than recomputing them. Both are
+## self-bootstrapping (they source 00, 01 and each other if needed), so nothing
+## else has to move.
 scripts <- c("00_config.R",
              "01_load_data.R",
              "07_nested_regression.R",
+             "09_pooled_regression.R",
              "02_table1.R",
              "03_figures.R",
              "04_mediation_single.R",

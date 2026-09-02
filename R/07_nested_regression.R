@@ -49,8 +49,9 @@
 ##   point. This section is the confirmatory counterpart: two receptors chosen
 ##   in advance on pharmacological grounds, reported the way a multiple
 ##   regression is normally reported -- coefficient table, added-variable
-##   plots, observed vs predicted, residual diagnostics, model comparison --
-##   and then a formal test of whether the slopes differ between drugs.
+##   plots, observed vs predicted, residual diagnostics, model comparison.
+##   The formal test of whether the slopes differ BETWEEN drugs is section 20
+##   (R/09_pooled_regression.R), which pools the groups instead.
 ##   HT4 and HT6 are numerically identical to section 16's R_5HT4 and R_5HT6
 ##   rows (same formula, same data); that is a deliberate cross-check.
 ##
@@ -66,8 +67,11 @@
 ## WHY SEPARATELY BY GROUP
 ##   Same reasoning as sections 15-17: the ROE-pain slope reverses sign between
 ##   drugs, so a pooled model averages the two into something smaller than
-##   either. One model per group is the stratified estimate; 18e then tests
-##   whether the slopes actually differ rather than leaving it to the eye.
+##   either. One model per group is the stratified estimate; section 20
+##   (R/09_pooled_regression.R) then tests whether the slopes actually differ
+##   rather than leaving it to the eye. Read that test first: if the drugs do
+##   NOT differ, splitting them here is spending degrees of freedom for
+##   nothing, and the pooled model is the better summary.
 ##
 ## SCALING -- RAW UNITS
 ##   Unlike sections 15/16/17, coefficients here are reported in RAW units:
@@ -80,7 +84,7 @@
 ##         the xlsx for exactly that comparison.
 ##     (b) the raw log ROE slope is not directly comparable ACROSS drugs
 ##         either, since ROE differs ~40x in scale between them. The
-##         interaction test in 18e is still a valid test of raw-unit slope
+##         interaction test in section 20 is still a valid test of raw-unit slope
 ##         equality; just do not read the two raw numbers as effect sizes.
 ##   Covariate scales in M5: MME enters as log10 (it is heavily right-skewed
 ##   and no subject has MME == 0, so nothing is lost), MQS non-opioid enters
@@ -118,7 +122,8 @@ MREG_GROUPS <- FOCUS_GROUPS   # Hydrocodone group / Tramadol group
 MREG_MIN_N  <- 12             # skip a group x model cell smaller than this
 
 ## Derived predictors, computed once here on `master` so that 18c's per-group
-## fits, 18e's pooled fit and 18l's SOWS models all see the identical columns.
+## fits, 18l's SOWS models and section 20's pooled fits all see the identical
+## columns.
 ##
 ## (a) The two interaction terms: exposure x receptor, one per receptor. Built
 ## on log_ROE (not raw ROE), because log_ROE is what enters the models as a
@@ -577,86 +582,16 @@ if (nrow(mreg_nested_tbl)) {
 }
 
 
-## ---- 18e. GROUP DIFFERENCE: INTERACTION MODELS -------------------------------
-## Fitting the two drugs separately shows the slopes look different; it does not
-## test that they ARE different. Pool the two groups and interact every
-## predictor with drug: each interaction coefficient IS the raw-unit slope
-## difference (tramadol minus hydrocodone, given the factor's level order), and
-## the model-level F test asks whether the drugs differ on any slope at all.
-
-mreg_pool <- master %>%
-  dplyr::filter(!is.na(Plot_Group), Plot_Group %in% MREG_GROUPS) %>%
-  dplyr::mutate(.grp = factor(as.character(Plot_Group), levels = MREG_GROUPS))
-
-mreg_inter_rows  <- list()
-mreg_intomni_rows <- list()
-mreg_inter_fits  <- list()
-
-for (mk in names(MREG_MODELS)) {
-  preds <- MREG_MODELS[[mk]]
-  vars  <- c(MREG_Y, preds, ".grp")
-  if (!all(setdiff(vars, ".grp") %in% names(mreg_pool))) next
-
-  dp <- as.data.frame(mreg_pool[, vars, drop = FALSE])
-  dp <- dp[stats::complete.cases(dp), , drop = FALSE]
-  num <- setdiff(vars, ".grp")
-  dp  <- dp[apply(dp[, num, drop = FALSE], 1, function(r) all(is.finite(r))), , drop = FALSE]
-  if (nrow(dp) < MREG_MIN_N || nlevels(droplevels(dp$.grp)) < 2) next
-
-  rhs  <- paste(sprintf("`%s`", preds), collapse = " + ")
-  m_add <- stats::lm(stats::as.formula(sprintf("`%s` ~ .grp + %s", MREG_Y, rhs)), data = dp)
-  m_int <- stats::lm(stats::as.formula(sprintf("`%s` ~ .grp * (%s)", MREG_Y, rhs)), data = dp)
-  mreg_inter_fits[[mk]] <- list(add = m_add, int = m_int, data = dp, preds = preds)
-
-  ci <- suppressWarnings(stats::confint(m_int))
-  cf <- summary(m_int)$coefficients
-  keep <- grep("^\\.grp.*:", rownames(cf))
-
-  if (length(keep)) {
-    trm <- rownames(cf)[keep]
-    mreg_inter_rows[[mk]] <- tibble::tibble(
-      model      = mk,
-      term       = gsub("`", "", trm),
-      predictor  = gsub("`", "", sub("^.*:", "", trm)),
-      comparison = paste0(MREG_GROUPS[2], " minus ", MREG_GROUPS[1]),
-      n          = nrow(dp),
-      est        = cf[keep, 1],
-      se         = cf[keep, 2],
-      t          = cf[keep, 3],
-      p          = cf[keep, 4],
-      ci_lo      = ci[match(trm, rownames(ci)), 1],
-      ci_hi      = ci[match(trm, rownames(ci)), 2]
-    )
-  }
-
-  av <- stats::anova(m_add, m_int)
-  mreg_intomni_rows[[mk]] <- tibble::tibble(
-    model  = mk, n = nrow(dp),
-    df_num = av$Df[2], df_den = av$Res.Df[2],
-    F_stat = av$F[2],  p = av$`Pr(>F)`[2]
-  )
-}
-
-mreg_interaction_tbl <- dplyr::bind_rows(mreg_inter_rows)
-mreg_intomni_tbl     <- dplyr::bind_rows(mreg_intomni_rows)
-
-if (nrow(mreg_interaction_tbl)) {
-  mreg_interaction_tbl <- mreg_interaction_tbl %>%
-    dplyr::mutate(model_lab = unname(MREG_MODEL_LABELS[model]),
-                  term_lab  = mreg_short(predictor),
-                  sig       = !is.na(p) & p < 0.05,
-                  p_fmt     = mreg_fmt_p(p))
-  cat("\n----- SLOPE DIFFERENCES BETWEEN DRUGS (interaction terms, raw units) -----\n")
-  cat("(", MREG_GROUPS[2], " minus ", MREG_GROUPS[1], ")\n\n", sep = "")
-  print(as.data.frame(mreg_interaction_tbl %>%
-          dplyr::select(model, predictor, n, est, se, ci_lo, ci_hi, t, p)),
-        row.names = FALSE, digits = 3)
-}
-if (nrow(mreg_intomni_tbl)) {
-  mreg_intomni_tbl$p_fmt <- mreg_fmt_p(mreg_intomni_tbl$p)
-  cat("\n----- OMNIBUS TEST: do any slopes differ between drugs? -----\n\n")
-  print(as.data.frame(mreg_intomni_tbl), row.names = FALSE, digits = 3)
-}
+## ---- 18e. MOVED ---------------------------------------------------------------
+## The pooled group-difference models that used to live here are now section 20
+## (R/09_pooled_regression.R), along with the three figures that were built from
+## them (the per-receptor marginal-effect plots, the interaction-slopes figure
+## and the slope-difference forest) and their two .xlsx sheets.
+##
+## The split is by question, not by convenience: everything left in this file
+## models ONE drug at a time, and everything in 09 compares the two. 09 runs
+## after this file and reuses its helpers and its stratified fits (`mreg_fits`),
+## so nothing here needs to know about it.
 
 
 ## ---- 18f. FIGURE THEME + FILE-NAME HELPERS -----------------------------------
@@ -840,9 +775,19 @@ for (g in names(mreg_fits)) {
 ## one figure (and only this one) with SOWS as the outcome. Arguments: the
 ## group, the model set it was fit with, that group's coefficient and fit
 ## tables, the outcome variable name (for the title), and where to write.
+## `caption` is overridable because section 20 reuses this function for the
+## pooled models, where the default text is wrong twice over: those models have
+## no standardized betas to point at, and their columns do not "differ in n".
+## Default unchanged, so sections 18h and 18l are untouched.
 mreg_table_figure <- function(g, models, coef_tbl, fit_tbl, yv,
                               dir = MREG_DIR, file = NULL,
-                              shorts = MREG_MODEL_SHORT) {
+                              shorts = MREG_MODEL_SHORT,
+                              caption = paste0(
+                                "*** p < .001, ** p < .01, * p < .05.  ",
+                                "Raw coefficients are not comparable across predictors (different scales); ",
+                                "see the .xlsx for standardized betas.\n",
+                                "VIF > 5 would indicate predictors competing for the same variance.  ",
+                                "Columns differ in n where a predictor has missing values -- compare the n row.")) {
   mods <- intersect(names(models), unique(fit_tbl$model[fit_tbl$group == g]))
   if (!length(mods)) return(invisible(NULL))
   if (is.null(file)) file <- sprintf("MREG_table_%s.png", mreg_slug(g))
@@ -937,11 +882,7 @@ mreg_table_figure <- function(g, models, coef_tbl, fit_tbl, yv,
       title    = sprintf("%s regressed on log10 ROE and receptor activity -- %s",
                          mreg_lab(yv), g),
       subtitle = "Raw-unit coefficient, standard error in parentheses",
-      caption  = paste0("*** p < .001, ** p < .01, * p < .05.  ",
-                        "Raw coefficients are not comparable across predictors (different scales); ",
-                        "see the .xlsx for standardized betas.\n",
-                        "VIF > 5 would indicate predictors competing for the same variance.  ",
-                        "Columns differ in n where a predictor has missing values -- compare the n row.")
+      caption  = caption
     ) +
     ggplot2::theme_void(base_size = 12) +
     ggplot2::theme(
@@ -1100,235 +1041,15 @@ if (nrow(mreg_fit_tbl)) {
             h = 5.5 + 0.3 * (nrow(mreg_nested_tbl) + 1))
 }
 
-## (7) Marginal (adjusted) effect of each receptor from the model HT4_HT6:
-## predicted NRS across the observed range of that receptor with the other
-## predictors held at their group means, 95% CI ribbon, raw data overlaid as
-## partial residuals so the points sit on the same scale as the line.
-## HT4_HT6, the two-receptor main-effects model, is used below for the
-## per-receptor marginal-effect plots (7) and the drug-interaction-slopes plot
-## (8). Deliberately hardcoded rather than "last model in the list", for two
-## separate reasons:
+## (7), (8), (9) MOVED
+## The per-receptor marginal-effect plots, the drug-interaction-slopes figure
+## and the slope-difference forest are now section 20
+## (R/09_pooled_regression.R), with the pooled models they annotate. All three
+## are pictures of how the two drugs COMPARE; everything still in this file is
+## a picture of one drug at a time.
 ##
-##   - M4 and M5 both contain product terms. Both plots hold every OTHER
-##     predictor at its mean while sweeping one receptor across the x-axis,
-##     which is wrong when "other predictors" includes a product built from
-##     the very receptor being swept -- the product would stay frozen at its
-##     mean instead of moving with the receptor, so the drawn line would not
-##     match what the model actually predicts.
-##   - M5 would additionally freeze three covariates at their means to draw one
-##     receptor's line. That line is not wrong, but it is a picture of an
-##     8-predictor model at n ~ 13-18 and reads as far more precise than it is.
-##
-## The other models still get their own coefficient forest, regression table,
-## nested test and model-comparison entries; they just aren't the model behind
-## THESE two figures.
-MREG_FULL <- "HT4_HT6"
-
-for (rv in setdiff(MREG_MODELS[[MREG_FULL]], MREG_X)) {
-  line_rows <- list(); pt_rows <- list(); lab_rows <- list()
-
-  for (g in names(mreg_fits)) {
-    res <- mreg_fits[[g]][[MREG_FULL]]
-    if (is.null(res) || !rv %in% res$preds) next
-    d <- res$data; m <- res$model
-
-    grid <- data.frame(seq(min(d[[rv]]), max(d[[rv]]), length.out = 120))
-    names(grid) <- rv
-    for (o in setdiff(res$preds, rv)) grid[[o]] <- mean(d[[o]])
-    pr <- stats::predict(m, newdata = grid, interval = "confidence")
-    line_rows[[g]] <- tibble::tibble(group = g, x = grid[[rv]],
-                                     fit = pr[, 1], lo = pr[, 2], hi = pr[, 3])
-
-    ## Partial residuals: observed minus the fitted contribution of the OTHER
-    ## predictors, so each point is "this subject's NRS with exposure and the
-    ## other receptor netted out" -- directly comparable to the line.
-    b <- stats::coef(m)
-    contrib <- rep(0, nrow(d))
-    for (o in setdiff(res$preds, rv)) contrib <- contrib + b[[o]] * (d[[o]] - mean(d[[o]]))
-    pt_rows[[g]] <- tibble::tibble(group = g, x = d[[rv]], y = d[[res$yv]] - contrib)
-
-    cr <- res$coef[res$coef$term == rv, ]
-    lab_rows[[g]] <- tibble::tibble(
-      group = g,
-      lab = sprintf("%s\nb = %.3f (SE %.3f)\n95%% CI [%.3f, %.3f]\np = %s,  n = %d",
-                    g, cr$est[1], cr$se[1], cr$ci_lo[1], cr$ci_hi[1],
-                    mreg_fmt_p(cr$p[1]), nrow(d)))
-  }
-
-  if (!length(line_rows)) next
-  ln <- dplyr::bind_rows(line_rows); pt <- dplyr::bind_rows(pt_rows)
-  lb <- dplyr::bind_rows(lab_rows)
-
-  ip <- nrow(mreg_interaction_tbl) &&
-    any(mreg_interaction_tbl$model == MREG_FULL & mreg_interaction_tbl$predictor == rv)
-  sub_int <- if (ip) {
-    r <- mreg_interaction_tbl[mreg_interaction_tbl$model == MREG_FULL &
-                                mreg_interaction_tbl$predictor == rv, ]
-    sprintf("Slope difference between drugs: %.3f (95%% CI [%.3f, %.3f]), p = %s",
-            r$est[1], r$ci_lo[1], r$ci_hi[1], mreg_fmt_p(r$p[1]))
-  } else NULL
-
-  p_mar <- ggplot2::ggplot() +
-    ggplot2::geom_ribbon(data = ln, ggplot2::aes(x, ymin = lo, ymax = hi, fill = group),
-                         alpha = 0.16) +
-    ggplot2::geom_line(data = ln, ggplot2::aes(x, fit, colour = group), linewidth = 1.1) +
-    ggplot2::geom_point(data = pt, ggplot2::aes(x, y, colour = group), size = 2.7, alpha = 0.85) +
-    ggplot2::scale_colour_manual(values = MREG_COLS, name = NULL) +
-    ggplot2::scale_fill_manual(values = MREG_COLS, guide = "none") +
-    ggplot2::labs(
-      title    = sprintf("Adjusted effect of %s on %s", mreg_lab(rv), mreg_lab(MREG_Y)),
-      subtitle = paste0(unname(MREG_MODEL_LABELS[MREG_FULL]),
-                        ", other predictors held at their group means.",
-                        if (!is.null(sub_int)) paste0("\n", sub_int) else ""),
-      x = mreg_lab(rv), y = sprintf("%s, adjusted (partial residual)", mreg_lab(MREG_Y)),
-      caption = paste0("Points are partial residuals: each subject's ", mreg_lab(MREG_Y),
-                       " with the other predictors' contributions removed, so they sit on the ",
-                       "same scale as the fitted line.\nRibbon is the 95% CI of the fit.")
-    ) +
-    mreg_theme()
-
-  ## Stats box in the top-right, one block per group.
-  ## NOTE: drawn with geom_label on an inline data.frame, not annotate("label").
-  ## ggplot2 4.x drops label.size from annotate() with only a warning, and the
-  ## box border comes back -- same trap as section 17's path diagrams.
-  yr <- range(c(pt$y, ln$hi, ln$lo))
-  box <- data.frame(x = max(ln$x), y = yr[2] + 0.14 * diff(yr),
-                    lab = paste(lb$lab, collapse = "\n\n"),
-                    stringsAsFactors = FALSE)
-  p_mar <- p_mar +
-    ggplot2::geom_label(data = box, ggplot2::aes(x, y, label = lab),
-                        inherit.aes = FALSE, hjust = 1, vjust = 1, size = 2.9,
-                        fill = "white", alpha = 0.85, linewidth = 0,
-                        lineheight = 0.98) +
-    ggplot2::expand_limits(y = yr[2] + 0.16 * diff(yr))
-
-  mreg_save(p_mar, sprintf("MREG_partial_%s.png", sub("^R_", "", rv)), w = 9, h = 7)
-}
-
-## (8) The interaction picture: each drug's fitted line for each predictor, from
-## the full interaction model, with the slope-difference p annotated. This is
-## the visual form of the test in 18e.
-if (length(mreg_inter_fits) && !is.null(mreg_inter_fits[[MREG_FULL]])) {
-  fi <- mreg_inter_fits[[MREG_FULL]]
-  m  <- fi$int; dp <- fi$data
-
-  ln_rows <- list(); pt_rows <- list()
-  for (pv in fi$preds) {
-    for (g in MREG_GROUPS) {
-      dg <- dp[dp$.grp == g, , drop = FALSE]
-      if (!nrow(dg)) next
-      grid <- data.frame(seq(min(dg[[pv]]), max(dg[[pv]]), length.out = 100))
-      names(grid) <- pv
-      grid$.grp <- factor(g, levels = MREG_GROUPS)
-      for (o in setdiff(fi$preds, pv)) grid[[o]] <- mean(dg[[o]])
-      pr <- stats::predict(m, newdata = grid, interval = "confidence")
-      ln_rows[[paste(pv, g)]] <- tibble::tibble(
-        predictor = pv, group = g, x = grid[[pv]],
-        fit = pr[, 1], lo = pr[, 2], hi = pr[, 3])
-
-      ## Partial residuals under the interaction model: this group's slope for
-      ## the other predictors is the main effect PLUS its interaction term.
-      ## The reference level (MREG_GROUPS[1]) has no interaction term at all,
-      ## so look it up defensively rather than indexing blind.
-      b <- stats::coef(m)
-      bget <- function(nm) {
-        v <- b[gsub("`", "", names(b)) == nm]
-        if (!length(v) || is.na(v[1])) 0 else unname(v[1])
-      }
-      contrib <- rep(0, nrow(dg))
-      for (o in setdiff(fi$preds, pv)) {
-        slope_g <- bget(o) + bget(paste0(".grp", g, ":", o))
-        contrib <- contrib + slope_g * (dg[[o]] - mean(dg[[o]]))
-      }
-      pt_rows[[paste(pv, g)]] <- tibble::tibble(
-        predictor = pv, group = g, x = dg[[pv]], y = dg[[MREG_Y]] - contrib)
-    }
-  }
-
-  if (length(ln_rows)) {
-    lnI <- dplyr::bind_rows(ln_rows); ptI <- dplyr::bind_rows(pt_rows)
-
-    facet_lab <- vapply(fi$preds, function(pv) {
-      r <- mreg_interaction_tbl[mreg_interaction_tbl$model == MREG_FULL &
-                                  mreg_interaction_tbl$predictor == pv, ]
-      if (!nrow(r)) return(mreg_lab(pv))
-      sprintf("%s\nslope difference = %.3f, p = %s",
-              mreg_lab(pv), r$est[1], mreg_fmt_p(r$p[1]))
-    }, character(1))
-
-    lnI$panel <- factor(facet_lab[lnI$predictor], levels = unname(facet_lab))
-    ptI$panel <- factor(facet_lab[ptI$predictor], levels = unname(facet_lab))
-
-    p_int <- ggplot2::ggplot() +
-      ggplot2::geom_ribbon(data = lnI, ggplot2::aes(x, ymin = lo, ymax = hi, fill = group),
-                           alpha = 0.15) +
-      ggplot2::geom_line(data = lnI, ggplot2::aes(x, fit, colour = group), linewidth = 1.1) +
-      ggplot2::geom_point(data = ptI, ggplot2::aes(x, y, colour = group),
-                          size = 2.5, alpha = 0.85) +
-      ggplot2::scale_colour_manual(values = MREG_COLS, name = NULL) +
-      ggplot2::scale_fill_manual(values = MREG_COLS, guide = "none") +
-      ggplot2::facet_wrap(~ panel, scales = "free_x", nrow = 1) +
-      ggplot2::labs(
-        title    = "Do the slopes differ between drugs?",
-        subtitle = sprintf("Pooled model %s ~ drug x (%s), n = %d.  Slope difference = %s minus %s",
-                           mreg_lab(MREG_Y), paste(mreg_short(fi$preds), collapse = " + "),
-                           nrow(dp), MREG_GROUPS[2], MREG_GROUPS[1]),
-        x = "Predictor (raw units)",
-        y = sprintf("%s, adjusted (partial residual)", mreg_lab(MREG_Y)),
-        caption = paste0("Each panel's p is the drug x predictor interaction: the test that the two ",
-                         "lines are not parallel.\nNote log10 ROE spans a very different range in the ",
-                         "two drugs, so its two slopes are estimated over barely overlapping x.")
-      ) +
-      mreg_theme()
-
-    mreg_save(p_int, "MREG_interaction_slopes.png",
-              w = 4.6 * length(fi$preds) + 1.2, h = 6.2)
-  }
-}
-
-## (9) Slope differences as a forest: every interaction coefficient from every
-## model, with its CI. A CI clear of zero means the drugs genuinely differ on
-## that slope.
-if (nrow(mreg_interaction_tbl)) {
-  idf <- mreg_interaction_tbl %>%
-    dplyr::mutate(
-      model_lab = factor(model_lab, levels = unname(MREG_MODEL_LABELS)),
-      term_lab  = factor(term_lab,
-                         levels = rev(unique(mreg_short(unlist(MREG_MODELS)))))
-    )
-
-  p_gd <- ggplot2::ggplot(idf, ggplot2::aes(est, term_lab)) +
-    ggplot2::geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50") +
-    ggplot2::geom_errorbar(ggplot2::aes(xmin = ci_lo, xmax = ci_hi),
-                            orientation = "y", width = 0.16, linewidth = 0.8, colour = "grey30") +
-    ggplot2::geom_point(ggplot2::aes(shape = sig), size = 3.2,
-                        colour = "grey15", fill = "white") +
-    ggplot2::geom_text(ggplot2::aes(label = sprintf("%.2f, p = %s", est, p_fmt)),
-                       vjust = -1.25, size = 3.1, colour = "grey25") +
-    ggplot2::scale_shape_manual(values = c(`TRUE` = 16, `FALSE` = 21),
-                                labels = c(`TRUE` = "p < .05", `FALSE` = "n.s."),
-                                name = NULL, drop = FALSE) +
-    ggplot2::facet_wrap(~ model_lab, ncol = 1, scales = "free_y") +
-    ## Per-panel padding, same reasoning as figure (3).
-    ggplot2::scale_y_discrete(expand = ggplot2::expansion(add = c(0.55, 0.95))) +
-    ggplot2::labs(
-      title    = "Slope differences between drugs",
-      subtitle = sprintf("Interaction terms: %s minus %s, raw units, with 95%% CI",
-                         MREG_GROUPS[2], MREG_GROUPS[1]),
-      x = sprintf("Difference in %s change per unit of predictor", mreg_lab(MREG_Y)),
-      y = NULL,
-      caption = paste0("A CI clear of the dashed line means the two drugs genuinely differ on that slope. ",
-                       "Raw units: the log10 ROE difference is not an effect size,\nsince ROE spans a ",
-                       "very different range in the two groups.")
-    ) +
-    mreg_theme()
-
-  ## Sized like figure (3): tall enough for the densest panel, times the
-  ## number of panels.
-  mreg_save(p_gd, "MREG_group_difference_forest.png",
-            w = 9, h = length(unique(idf$model_lab)) *
-                       max(1.6, 0.30 * max(table(idf$model_lab))) + 2.6)
-}
+## Figure (7) is drawn from the stratified fits in `mreg_fits`, which stay
+## here -- 09 runs afterwards and reads them.
 
 
 ## ---- 18j. EXPORT -------------------------------------------------------------
@@ -1362,8 +1083,9 @@ mreg_sheets <- list(
                   ci_lo, ci_hi, beta_std, vif),
   Model_fit         = mreg_fit_tbl,
   Nested_tests      = if (nrow(mreg_nested_tbl)) mreg_nested_tbl else tibble::tibble(note = "no nested comparisons run"),
-  Interaction_terms = if (nrow(mreg_interaction_tbl)) mreg_interaction_tbl else tibble::tibble(note = "no interaction models fit"),
-  Interaction_omnibus = if (nrow(mreg_intomni_tbl)) mreg_intomni_tbl else tibble::tibble(note = "none"),
+  ## Interaction_terms and Interaction_omnibus moved to section 20's workbook
+  ## (New_Outputs/between_drug_comparison/Stats_Between_Drug_Comparison.xlsx)
+  ## along with the models that produce them. Same contents, different file.
   Diagnostics       = mreg_fit_tbl %>%
     dplyr::select(group, model, n, max_VIF, max_cooksD, shapiro_p, bp_p, sigma, RMSE),
   Config            = mreg_config
@@ -1491,9 +1213,10 @@ message("Section 18l (SOWS) tables written to: ",
 ## - To re-run on a different outcome or different receptors, edit MREG_Y and
 ##   MREG_MODELS at 18a (and MREG_MODEL_LABELS, MREG_MODEL_SHORT and MREG_NESTED
 ##   to match) and re-source from 18a. Nothing downstream is hard-coded to two
-##   receptors or five models -- except MREG_FULL just above 18g, which is
-##   deliberately pinned to "HT4_HT6" rather than auto-following the list (see
-##   its comment), and REGTAB_MODELS in 02_table1.R, which names the three
+##   receptors or five models -- except MREG_FULL at 20a in
+##   R/09_pooled_regression.R, which is deliberately pinned to "HT4_HT6"
+##   rather than auto-following the list (see its comment), and REGTAB_MODELS
+##   in 02_table1.R, which names the three
 ##   models (M3, M4, M5) that Tables 2 and 3 publish. If you rename a model key
 ##   here, rename it there too.
 ## - Any interaction term you add at 18a has to exist as a COLUMN on `master`

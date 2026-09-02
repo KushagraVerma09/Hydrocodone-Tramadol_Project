@@ -225,7 +225,16 @@ MED_LABELS <- c(log_ROE = "log10 ROE",
                 ## models M4/M5) -- added here so their axis titles/figure
                 ## titles read as English instead of the raw column name.
                 R_5HT4_x_ROE = "5-HT4 x log10 ROE",
-                R_5HT6_x_ROE = "5-HT6 x log10 ROE")
+                R_5HT6_x_ROE = "5-HT6 x log10 ROE",
+                ## Section 20's pooled between-drug models
+                ## (09_pooled_regression.R). Drug enters as a factor with
+                ## Hydrocodone as reference, so every one of these reads
+                ## Tramadol MINUS Hydrocodone -- which is why the label
+                ## names the direction rather than just saying "drug".
+                group_TvsH     = "Drug group (Tramadol vs Hydrocodone)",
+                group_x_5HT4   = "Group x 5-HT4",
+                group_x_5HT6   = "Group x 5-HT6",
+                group_x_logROE = "Group x log10 ROE")
 med_lab <- function(v) if (!is.na(MED_LABELS[v])) unname(MED_LABELS[v]) else v
 
 ## ---- 7. SHARED FORMATTING HELPERS ---------------------------------------------
