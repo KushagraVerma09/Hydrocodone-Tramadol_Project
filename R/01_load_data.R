@@ -40,6 +40,29 @@ receptor <- read_excel(F_RECEPTOR) %>%
 behavior <- read_excel(F_BEHAVIOR)
 names(behavior) <- make.names(names(behavior))
 behavior <- behavior %>%
+  ## The sheet ships its own log columns; all four are dropped here and
+  ## recomputed below from the raw values. For log.PainDur, logMME and
+  ## Log.OpDur that is a no-op -- they are bit-identical to log10(raw).
+  ##
+  ## logROE is NOT, and the difference matters. Its formula is
+  ## LOG10(100000*ROE), which is algebraically log10(ROE) + 5 -- a constant
+  ## shift, statistically inert (it moves the intercept and nothing else).
+  ## The problem is the ROE == 0 subjects: that formula returns #NUM! for
+  ## them, and in 8 of those cells the formula has been DELETED and a
+  ## literal 0 typed in. (One row, PIN at sheet row 86, still holds the
+  ## formula and its #NUM! -- which is how you can tell this was manual
+  ## error-clearing rather than a deliberate rule.)
+  ##
+  ## On that scale a 0 does not mean "no opioid": it means ROE = 1e-5 mg/L,
+  ## a real concentration BELOW the smallest measured value (3.7e-5, which
+  ## maps to 0.568). Those 8 points would enter every model at an invented
+  ## x at the edge of the range, carrying ~25% of the leverage while being
+  ## 16% of the sample, and they move the between-drug omnibus test
+  ## (section 20) from p = .0003 to p = .096.
+  ##
+  ## So log_ROE is recomputed as log10(ROE) below and the zero-exposure
+  ## subjects fall out on the is.finite() filters in sections 15-18 and 20.
+  ## Do not "restore" the sheet's column without reading this first.
   select(-any_of(c("log.PainDur", "logMME", "logROE", "Log.OpDur", "X"))) %>%
   rename(DOU = Op.Dur, SOWS = sows, COMM = comm) %>%
   mutate(

@@ -305,6 +305,11 @@ message("\nPublication table successfully formatted and saved to: ", normalizePa
 ## session. Same self-bootstrapping idiom as the config/data guards at the top.
 if (!exists("mreg_coef_tbl") || !exists("mreg_fit_tbl") || !exists("mreg_sows"))
   source(file.path(.HTK_PROJECT_DIR, "R", "07_nested_regression.R"))
+## Table 4 is built from section 20's pooled models. Same idiom, same
+## reasoning: 09 runs before this file in Run_All.R, so the guard does not
+## normally fire, and reading 09's .xlsx instead would serve stale numbers.
+if (!exists("preg_coef_tbl") || !exists("preg_fit_tbl"))
+  source(file.path(.HTK_PROJECT_DIR, "R", "09_pooled_regression.R"))
 
 ## The three models, in column order. Named by KEY, not position, so reordering
 ## MREG_MODELS in 07 cannot silently change which models this table shows.
@@ -384,7 +389,14 @@ build_regression_table <- function(coef_tbl, fit_tbl,
 
 ## Exports one built table both ways, step for step as Table 1 above: openxlsx
 ## for the gray-filled .xlsx, gt for the .html/.docx with .rtf fallback.
-export_regression_table <- function(rt, base, title, subtitle) {
+## `note` is the second footnote -- the one that describes how the models
+## were fit. Parameterised because Table 4 pools the groups, making the
+## default text exactly backwards for it. Default unchanged for Tables 2/3.
+export_regression_table <- function(rt, base, title, subtitle,
+                                    note = paste0(
+                                      "Models are fit separately within each drug group, ",
+                                      "not pooled with a group term. \"model p\" is the ",
+                                      "overall F test for that column's model.")) {
   out <- as.data.frame(rt$tbl)
   n_g <- length(rt$groups)
   n_m <- length(rt$hdr)
@@ -440,9 +452,7 @@ export_regression_table <- function(rt, base, title, subtitle) {
                          "confidence intervals."),
       locations = cells_column_labels(columns = Predictor)) %>%
     tab_footnote(
-      footnote  = paste0("Models are fit separately within each drug group, ",
-                         "not pooled with a group term. \"model p\" is the ",
-                         "overall F test for that column's model."),
+      footnote  = note,
       locations = cells_column_labels(columns = rt$grid$id[1])) %>%
     tab_options(
       table.border.top.color            = "black",
@@ -499,4 +509,35 @@ export_regression_table(
   title    = "Table 3. SOWS withdrawal regressed on log10 ROE and 5-HT4 / 5-HT6 activity",
   subtitle = "Raw-unit coefficients, fit separately within each drug group")
 
-message("\nTables 2 and 3 (regression) saved to: ", normalizePath(OUT_DIR))
+## ---- Table 4: NRS, both groups pooled ---------------------------------------
+## The between-drug test, in the same house style as Tables 2 and 3. Unlike
+## those, this is ONE model set fit on both groups at once, so it has a single
+## column block rather than one per drug -- which is why `groups` is a single
+## label here. build_regression_table() needed no change for that: it already
+## takes `groups` as an argument and keys every lookup off it.
+table4_pooled <- build_regression_table(
+  preg_coef_tbl, preg_fit_tbl,
+  models     = names(PREG_MODELS),
+  groups     = PREG_GROUP_LAB,
+  shorts     = PREG_MODEL_SHORT,
+  model_defs = PREG_MODELS)
+
+cat("\n===== TABLE 4: NRS pain, both drug groups pooled =====\n")
+print(as.data.frame(table4_pooled$tbl), row.names = FALSE)
+
+export_regression_table(
+  table4_pooled, "Table4_Regression_Pooled_Group",
+  title    = "Table 4. NRS pain regressed on 5-HT4 / 5-HT6 activity, log10 ROE and drug group",
+  subtitle = sprintf("Raw-unit coefficients, both groups in one model (n = %d)",
+                     preg_fit_tbl$n[1]),
+  note     = paste0(
+    "Both drug groups are fit in ONE model, with drug as a predictor. Drug is a ",
+    "factor with ", FOCUS_GROUPS[1], " as reference, so every drug row reads ",
+    FOCUS_GROUPS[2], " minus ", FOCUS_GROUPS[1], ". In P2 the plain receptor and ",
+    "ROE rows are that predictor's slope in ", FOCUS_GROUPS[1], "; add the ",
+    "matching interaction row to get ", FOCUS_GROUPS[2], ". P1 vs P2 is the test ",
+    "of whether the two drugs share slopes at all -- see the section 20 output ",
+    "folder for that F test and for each drug's derived slope. \"model p\" is the ",
+    "overall F test for that column's model."))
+
+message("\nTables 2, 3 and 4 (regression) saved to: ", normalizePath(OUT_DIR))
