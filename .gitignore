@@ -7,3 +7,5 @@
 
 # Claude Code worktrees (separate git worktrees, must not be tracked)
 .claude/worktrees/
+
+AGENTS.md
