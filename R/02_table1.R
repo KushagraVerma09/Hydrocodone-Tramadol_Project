@@ -540,4 +540,35 @@ export_regression_table(
     "folder for that F test and for each drug's derived slope. \"model p\" is the ",
     "overall F test for that column's model."))
 
-message("\nTables 2, 3 and 4 (regression) saved to: ", normalizePath(OUT_DIR))
+## ---- Table 5: SOWS, both groups pooled --------------------------------------
+## Same house style, same function, as Table 4 -- just SOWS's pooled objects
+## (preg_sows_coef_tbl / preg_sows_fit_tbl / PREG_MODELS_SOWS) in place of NRS's.
+## Those come from 09_pooled_regression.R section 20j; the guard above that
+## sources 09 for Table 4 already covers this (20j runs inside the same
+## source() call as 20b), so no second guard is needed here.
+table5_pooled_sows <- build_regression_table(
+  preg_sows_coef_tbl, preg_sows_fit_tbl,
+  models     = names(PREG_MODELS_SOWS),
+  groups     = PREG_GROUP_LAB,
+  shorts     = PREG_MODEL_SHORT,
+  model_defs = PREG_MODELS_SOWS)
+
+cat("\n===== TABLE 5: SOWS withdrawal, both drug groups pooled =====\n")
+print(as.data.frame(table5_pooled_sows$tbl), row.names = FALSE)
+
+export_regression_table(
+  table5_pooled_sows, "Table5_Regression_Pooled_Group_SOWS",
+  title    = "Table 5. SOWS withdrawal regressed on 5-HT4 / 5-HT6 activity, log10 ROE and drug group",
+  subtitle = sprintf("Raw-unit coefficients, both groups in one model (n = %d)",
+                     preg_sows_fit_tbl$n[1]),
+  note     = paste0(
+    "Both drug groups are fit in ONE model, with drug as a predictor. Drug is a ",
+    "factor with ", FOCUS_GROUPS[1], " as reference, so every drug row reads ",
+    FOCUS_GROUPS[2], " minus ", FOCUS_GROUPS[1], ". In P2 the plain receptor and ",
+    "ROE rows are that predictor's slope in ", FOCUS_GROUPS[1], "; add the ",
+    "matching interaction row to get ", FOCUS_GROUPS[2], ". P1 vs P2 is the test ",
+    "of whether the two drugs share slopes at all -- see the between_drug_comparison_SOWS ",
+    "output folder for that F test and for each drug's derived slope. \"model p\" is the ",
+    "overall F test for that column's model."))
+
+message("\nTables 2, 3, 4 and 5 (regression) saved to: ", normalizePath(OUT_DIR))
